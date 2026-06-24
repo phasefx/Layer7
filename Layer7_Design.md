@@ -1,12 +1,17 @@
-# Layer7: Code Organization for Human Cognition
+# Layer7: Polyglot Code Organization for Human Cognition
 
-**Version:** 0.6 (Evolved)
+**Version:** 0.7 (Evolved)
 **Date:** 2026-06-23
 **Status:** Design in progress
 
-Layer7 is a Markdown-based code organization system designed for working memory constraints. It bridges narrative-first design with practical execution: your code lives in readable Markdown, compiles to executable tools, and can run via algorithms, LLMs, or both.
+Layer7 lets you write code in whatever language you already know for each job, organized as Markdown so you can come back to it later and still understand it. Just your existing skills, sequenced. We're targeting solo hobby coders with ADHD and similar brains; the mixing and matching of languages is feature.
 
-**Core principle:** All things allowed with narrative justification. Constraints are defaults, not laws.
+Layer7 aims to be skimmable, gistable, and understandable. It's meant to be readable when you come back to a project after a long absense. It is not trying to be all things to all people, nor is it catering to enterprise software development.
+
+**Core principles:**
+- All things allowed with narrative justification. Linter warns; Allow exception: documents.
+- Provide friction when the number of "things" goes past 7. This is a signal, not a constraint.
+- Unix philosophy: write programs that do one thing well, ensuring they can work together, and using text streams for universal communication. We just use Markdown instead of the Shell for our glue.
 
 ---
 
@@ -18,16 +23,17 @@ Layer7 is a Markdown-based code organization system designed for working memory 
 - **The disappearing code problem:** You write code, leave it, return weeks later—it's cryptic.
 - **Shame-free pragmatism:** Make trade-offs explicit and move on.
 - **Execution without cognitive overhead:** Return to code and understand it without loading 20 mental models.
+- **Modality:** Surface one small set of affordances at a time.
 
 ### What Layer7 Does
 
 1. **Organizes code as bounded Markdown.** Each module, chunk, and decision is scannable and narratable.
 2. **Respects cognitive limits.** ≤7 files per directory, ≤7 chunks per file, ≤7 layers per composition, ≤7 items per data contract. Soft warnings, not errors.
-3. **Compiles to executable tools.** A pre-processor turns Markdown into real, runnable processes — each chunk a subprocess in its own language, wired by an invisible generated preamble, not by special syntax inside the code itself.
+3. **Compiles to executable tools.** A pre-processor turns Markdown into real, runnable processes — each chunk a subprocess in its own language, wired by an invisible generated preamble.
 4. **Supports dual execution.** Run via LLM (analysis/debugging) or algorithms (production), against the same underlying tool calls.
 5. **Makes exceptions first-class.** Breaking a rule? Document why. It's all recorded.
-6. **Separates flow from logic.** Chunks stay pure and linear. Branching, looping, and routing live one level up.
-7. **Defers to real languages for what they already do well.** Layer7 narrates and sequences. It does not reinvent objects, types, concurrency, or persistent state — those are a "go write code" problem, not a Layer7 feature request. (New in v0.5 — see Section 9.)
+6. **Separates flow from logic.** Chunks stay pure and linear, if you let them. Branching, looping, and routing may live one level up.
+7. **Defers to real languages for what they already do well.** Layer7 narrates and sequences. It does not reinvent objects, types, concurrency, or persistent state — those are a "go write code" problem, not a Layer7 feature request.
 
 ---
 
@@ -62,6 +68,7 @@ Cross-file references use a qualified, dotted address:
 Online_Raffle.A_Ticket
 raffle.md-Online_Raffle.A_Ticket
 ```
+Use of cross-file references outside of a composition get soft-flagged by the Linter, and an Allow exception: may provide justification. A common exception would be for utility functions.
 
 Header text resolves to an identifier using shape-insensitive fuzzy matching.  The engine collapses whitespace, strips non-alphanumeric characters, and ignores casing (`The Tickets`, `The_Tickets`, and `theTickets` all map to `thetickets`).  This canonical symbol is what maps to the state table, what gets injected into a chunk's generated preamble (Section 4), and what qualified cross-file addresses resolve through.
 
@@ -73,7 +80,7 @@ Headers may nest (`##` containing `###`) for self-documentation and disambiguati
 
 - It runs in the same flat, top-to-bottom reading order as every other header in the file — nesting doesn't change execution order.
 - It inherits nothing from its parent header — no scope, no language, no implicit binding. Every header is fully self-describing on its own.
-- It does not, by itself, turn the parent header into anything other than what it already was (a value, a chunk, whatever). See Section 9 for why this matters — nesting used to be the accidental trigger for an entire object model, and that's deliberately not the case here.
+- It does not, by itself, turn the parent header into anything other than what it already was (a value, a chunk, whatever). 
 
 Nesting depth follows the same horizontal-first stance as directories: ≤2 levels is the soft default, deeper nesting is a linter warning (not an error) the same way directory depth or chunk count is. If you find yourself reaching for nesting as a way to express something *other* than addressing — inheritance, shared state, automatic scoping — that's the signal to stop and reconsider, not to add a feature.
 
@@ -86,10 +93,7 @@ Each `.md` file is a **module**. Standard structure:
 
 Handles collisions and movement.
 
-## Chunk: integrate velocity
-
-IN: entities (position, velocity), time.delta
-OUT: entities (updated position)
+## integrate velocity
 
 Apply velocity to position each frame.
 
@@ -165,12 +169,6 @@ A header with no arrow simply doesn't have a declared primary pipe — it can st
 If a chunk needs to produce an updated version of something — say, a filtered or appended `TheTickets` — the answer is the same mechanism, not a new one: that chunk declares itself the `=>` producer for that header and emits the entire new value on stdout. No partial mutation, no setters, no method calls. Build the whole new value in memory (trivial — it's one process, run once) and emit it whole.
 
 This keeps the Unix-pipe model intact: every chunk is still just "transform what I'm given into what I produce," nothing more. If a header genuinely needs more than one chunk able to update it independently over the file's lifetime, treat it as a **stream** (Section 6), not as an object with mutator methods (Section 9 covers why object semantics were considered and set aside).
-
-### State Models
-
-- **Ephemeral:** Current frame's input, temporary calculations (cleared each tick)
-- **Persistent:** Entity state, world data, saves (intentional accumulation) — subject to the same rule-of-7 sizing checks as any other data contract.
-- **Unbounded (explicit):** Logs, history, debug traces. Must be declared as such — an undeclared persistent value that keeps growing is a linter warning, not a silent default.
 
 ---
 
@@ -258,7 +256,7 @@ Layer7 does not have, and does not currently need, an async/await or concurrency
 Most headers have exactly one `=>` producer over a file's lifetime — whole-value replacement (Section 3) covers them. Streams are the documented exception for when a value genuinely needs more than one independent writer over time:
 
 ```markdown
-## Chunk: log result
+## log result
 
 Exception: Publishes to an open stream — any number of downstream
 modules may subscribe without this chunk changing.
@@ -285,7 +283,6 @@ The mechanism (Section 4): the pre-processor generates a wrapper in the calling 
 - ⚠️ Header nesting is 3 levels deep (consider flattening, or document why)
 - ⚠️ Two chunks both produce the same header with no narrative indicating intent (race condition, or should this be a stream?)
 - ⚠️ Multiple languages in one file without exception narrative (first language is free; every additional one needs justification)
-- ⚠️ A persistent value keeps growing with no Unbounded declaration
 
 These are all **soft** — suppressible with documented justification.
 
@@ -311,7 +308,7 @@ This section exists because of a recurring pattern across this design's evolutio
 
 A natural extension once headers can have nested sub-headers: a header with a JSON data shape *and* nested method-like sub-headers (`is_valid`, `addTicket`, `searchByName`) starts to look like an object — call its methods, mutate its internal state, from any chunk, in any file, in any language, via generated RPC glue.
 
-This was considered and set aside for v0.5, for two reasons:
+This was considered and set aside, for two reasons:
 
 1. **The trigger was invisible.** Whether a header is "just a value" or "a long-running stateful service callable from anywhere" would have been signaled only by whether it happened to have nested sub-headers underneath it — the single biggest lifecycle distinction in the system, hanging on the same syntax used for purely cosmetic addressing (Section 2). Keeping nesting meaning-free avoids this collapsing into one thing.
 2. **It's the global-mutable-object problem again, with friendlier syntax.** A stateful header with exposed mutator methods, callable from anywhere, in any order, is structurally the thing Layer7 has been trying to avoid since v0.3 — multiple writers with no visible ownership — just wearing a method-call face instead of a global-variable face.
@@ -329,7 +326,7 @@ This is now a standing design checkpoint, not a one-time decision: **when a prop
 Layer7 is language-agnostic. Code blocks can use any language. The first language used in a file is free; additional languages require an `Allow exception:` line naming the language.
 
 ```markdown
-## Chunk: fast math
+## fast math
 
 Allow exception: c
 
