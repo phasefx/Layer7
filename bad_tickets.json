@@ -1,0 +1,5 @@
+[
+  { "name": "Alice", "tickets_bought": 5 },
+  { "name": "Bob", "tickets_bought": 12 },
+  { "name": "Charlie", "tickets_bought": 101 }
+]
