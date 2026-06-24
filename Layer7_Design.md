@@ -39,7 +39,7 @@ Layer7 aims to be skimmable, gistable, and understandable. It's meant to be read
 
 ## 2. Structure & Organization
 
-### File Layout
+### Example File Layout
 
 ```
 myproject/
@@ -50,11 +50,11 @@ myproject/
 │   ├── physics.md
 │   └── render.md
 ├── compositions/
-│   └── morning_digest.md
+│   └── star_blaster.md
 └── .layer7.yml
 ```
 
-**Horizontal scaling first.** Add files at the same level before going deeper. Depth signals a different level of abstraction, not just more stuff.
+**Horizontal scaling first.** Add files at the same level before going deeper. Depth should signal a different level of abstraction, not just more stuff.
 
 **Directory scoping:** Sibling files share a namespace. Child directories are imported explicitly, not auto-visible.
 
@@ -89,20 +89,51 @@ Nesting depth follows the same horizontal-first stance as directories: ≤2 leve
 Each `.md` file is a **module**. Standard structure:
 
 ```markdown
-# Module: Physics
+
+# Physics
 
 Handles collisions and movement.
 
-## integrate velocity
+## Entity
 
-Apply velocity to position each frame.
+An example of a "header variable".
 
-```python
-def integrate_velocity(entity, delta):
-    entity.position.x += entity.velocity.x * delta
-    entity.position.y += entity.velocity.y * delta
-    return entity
+```JSON
+    { "position": { "x": 0, "y": 0 }, "velocity": { "x": 0, "y": 0 } }
 ```
+
+## Entities
+
+Could also use Entity as a data shape, but we don't have a syntax for that yet.
+
+```JSON
+    []
+```
+
+## Calculate Velocity
+
+A function. May be called as CalculateVelocity(myentity, mydelta),
+or more procedurally as in the next example.
+
+```Javascript
+(entity, delta) => {
+    entity.position.x += entity.velocity.x * delta;
+    entity.position.y += entity.velocity.y * delta;
+    return entity;
+};
+```
+
+## Sort Entities <= Entities, => Entities
+
+For a function, Entities would get passed in as the first argument.
+For a non-function, it would get passed in via STDIN.
+
+For a function, the return value would replace Entities.
+For a non-function, STDOUT would replace Entities.
+
+No code block yet, and that's allowed.
+
+
 ```
 
 **Key features:**
