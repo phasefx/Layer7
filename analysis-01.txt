@@ -1,0 +1,25 @@
+Makes sense — good use of the bigger model for the architectural lift, Flash for grinding bugs after. Here's a handoff note you can paste over:
+
+---
+
+**Handoff context for rewrite (Layer7 engine, v0.6 → v0.8 spec):**
+
+The attached `layer7.rb` is generations behind `Layer7_Design.md` — recommend a rewrite-from-spec rather than patching forward. Key things to design in from the start rather than bolt on:
+
+1. **Header matching** needs to go to at least `####` depth (design uses inline data shorthand like `` `[]` ``, `` `string` ``, `` `{}` `` at h4), not just `#`/`##`.
+
+2. **Redirection arrows are decoration-tolerant by design.** Any run of `<`/`<<`/`>`/`>>` chars (`<-`, `---<===`, `===>>`) should parse by *direction of outermost glyph*, not exact-match `<=`/`=>`. Also need to distinguish replace (`=>`) vs append (`==>>`) semantics — append should push to array or set key/value on object target.
+
+3. **Function-shaped headers must be language-agnostic.** Current code only RPC-wraps JS functions (string-sniffs `start_with?('function')`). Given the design's decision that *every* cross-language call goes through one uniform calling convention (an MCP-shaped dispatch), the wrapper-generation needs to be one generic mechanism parameterized by language, not per-pair glue (current Perl→Node shell-out is the wrong shape to generalize from).
+
+4. **Compositions are unimplemented** — no parsing for ` ```composition ` blocks, `Steps`/`Routing` headers, or the `SKIP` sentinel. This is core flow-control per the spec, currently chunks just get treated as plain code or silently mishandled.
+
+5. **Addressing/disambiguation is flat** — `canonical_id` collapses to lowercase-alphanumeric with no hierarchy. Spec wants progressive disambiguation (`Functional_Example` → `Core_Structure_Functional_Example` → `filename_...`) with collision detection, not last-write-wins overwrite.
+
+6. **Missing entirely:** the 7-chunk friction warning (core design principle, not cosmetic), and `Allow exception: <reason>` parsing to silence specific warnings.
+
+7. **Known break:** `build_command` has no case for plain JS chunks (only handles bash/perl/python) — will pass `nil` to `Open3.capture3` and raise.
+
+Suggested build order: nail down the arrow-parsing regex and address-resolution scheme first (everything else depends on those two), then data-slot registration (incl. inline shorthand), then generic RPC dispatch, then compositions last since they're the most novel/complex piece.
+
+Good luck — sounds like a fun rebuild rather than a slog.

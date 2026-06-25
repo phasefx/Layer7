@@ -1,0 +1,21 @@
+Yeah, this is the v0.6 engine catching up to the v0.8 design doc — a few generations behind. Walking through the mismatches:
+
+**Header matching is too narrow.** The regex `^(##?\s+...)` only catches `#` and `##` headers. Your design doc explicitly uses up to `####` for things like `Inline Example []` and `Functional Example`. Right now those headers just won't be found at all.
+
+**Redirection arrows only understand `<=` and `=>`.** The design says any decorated run of `<`/`<<`/`>`/`>>` (`<-`, `---<===`, etc.) should parse as a directional arrow. The current regex is hardcoded to exactly `<=` and `=>` — `===>>` (append) and `<<===` (streaming) won't match, and there's no append-vs-replace distinction at all (`>>` semantics from the design aren't implemented).
+
+**Inline header variables aren't handled.** `#### Inline Example []` / `` `string` `` / `` `{}` `` — the design's third data-slot syntax — has no parser path. Only fenced ```json/```yaml blocks become data slots (`data_chunk?` checks `lang` only).
+
+**Compositions don't exist yet.** No handling for ` ```composition ` blocks, no `Steps`/`Routing` parsing, no SKIP sentinel detection. Anything using flow control per section 3 will just get treated as an unrecognized/skipped chunk or blow up trying to "execute" the composition DSL as code.
+
+**Function-shaped headers are JS-only and string-sniffed.** `pure_js_function?` checks `code.strip.start_with?('function')` — so a Perl sub or Python def never gets RPC-wrapped, only literal JS function expressions do. Given you've now committed to "every cross-language call goes through the same calling convention" (our conversation above), this needs to generalize to all four languages, not special-case JS.
+
+**Cross-language calling is hardcoded one direction.** `inject_perl_rpc_wrappers` only generates Perl→Node shells, and bakes in a boolean-return assumption (`$res =~ /true/i`). With the "everything's an MCP-shaped call" decision, this whole mechanism is the wrong shape now — you'd want one generic dispatcher, not per-language-pair glue functions.
+
+**No addressing/disambiguation logic.** `canonical_id` is flat lowercase-alphanumeric collapse — there's no support for the hierarchical address resolution from section 2 (`Code_blocks_Functional_Example`, `filename_...`, etc.), so any name collision across headers will silently overwrite in `global_state`/chunk lookup.
+
+**No 7-chunks friction warning, no `Allow exception:` parsing at all.** Both are core-principle features in the design doc and totally absent here — the "all things allowed with narrative justification" mechanic doesn't exist yet.
+
+**`build_command` will break on JS chunks.** There's no `'javascript'`/`'js'` case, so any non-pure-function JS chunk reaching `run_chunk` gets `cmd = nil` and `Open3.capture3` will raise.
+
+Given the gap, want me to scope this as a rewrite-from-spec (fresh engine targeting v0.8 doc) rather than patching v0.6 forward? The composition DSL and generalized RPC dispatch in particular feel like they want to be designed in from the structure up, not bolted onto the existing chunk-by-chunk loop.
