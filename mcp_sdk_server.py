@@ -1,5 +1,6 @@
 import json
 import asyncio
+import threading
 from typing import Any
 import mcp.types as types
 from mcp.server import Server
@@ -13,6 +14,7 @@ class SDKMCPServer:
     def __init__(self, registry):
         self.registry = registry
         self.app = Server("Layer7")
+        self._lock = threading.Lock()
 
         @self.app.list_tools()
         async def list_tools() -> list[types.Tool]:
@@ -32,10 +34,11 @@ class SDKMCPServer:
             # Run the synchronous tool execution in a background thread
             # so we don't block the asyncio event loop handling MCP messages.
             def _run():
-                try:
-                    return self.registry.call_tool(name, arguments)
-                except Exception as e:
-                    return {"error": str(e)}
+                with self._lock:
+                    try:
+                        return self.registry.call_tool(name, arguments)
+                    except Exception as e:
+                        return {"error": str(e)}
 
             res = await asyncio.to_thread(_run)
             return [types.TextContent(type="text", text=json.dumps(res, indent=2))]
@@ -53,3 +56,44 @@ class SDKMCPServer:
                 )
 
         asyncio.run(_run_server())
+
+    def serve_sse(self, host: str, port: int):
+        """
+        Runs the MCP SDK SSE server over HTTP using Starlette and Uvicorn.
+        """
+        try:
+            from mcp.server.sse import SseServerTransport
+            from starlette.applications import Starlette
+            from starlette.routing import Route
+            import uvicorn
+        except ImportError:
+            print("Error: starlette and uvicorn are required for SSE support.")
+            print("Please install them with: pip install starlette uvicorn")
+            import sys
+            sys.exit(1)
+
+        sse = SseServerTransport("/messages")
+
+        async def handle_sse(request):
+            async with sse.connect_sse(
+                request.scope, request.receive, request._send
+            ) as streams:
+                await self.app.run(
+                    streams[0],
+                    streams[1],
+                    self.app.create_initialization_options()
+                )
+
+        async def handle_messages(request):
+            await sse.handle_post_message(request.scope, request.receive, request._send)
+
+        starlette_app = Starlette(
+            debug=True,
+            routes=[
+                Route("/sse", endpoint=handle_sse),
+                Route("/messages", endpoint=handle_messages, methods=["POST"]),
+            ],
+        )
+
+        print(f"Starting Layer7 MCP server on http://{host}:{port}/sse")
+        uvicorn.run(starlette_app, host=host, port=port)

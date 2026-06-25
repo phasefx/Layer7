@@ -156,6 +156,8 @@ def main():
                     "Polyglot Code Organization for Human Cognition")
     parser.add_argument("--serve", action="store_true", help="Start MCP server")
     parser.add_argument("--mode", choices=["debug", "toolkit"], help="MCP server mode")
+    parser.add_argument("--host", default="127.0.0.1", help="Host to bind for SSE server (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, help="Port to bind for SSE server (triggers network mode)")
     parser.add_argument("file", help="The Layer7 Markdown file to execute")
     parser.add_argument("args", nargs="*",
                         help="Arguments passed through to code blocks "
@@ -210,7 +212,14 @@ def main():
             from mcp_native_server import NativeMCPServer
             server = NativeMCPServer(registry)
 
-        server.serve_stdio()
+        if args.port is not None:
+            if hasattr(server, "serve_sse"):
+                server.serve_sse(args.host, args.port)
+            else:
+                print("Error: The native server fallback does not support SSE. Please install the official SDK (pip install mcp[cli] starlette uvicorn).")
+                sys.exit(1)
+        else:
+            server.serve_stdio()
     else:
         # Always use linear execution.
         # Compositions execute inline at their position in the document.
