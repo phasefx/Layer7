@@ -66,7 +66,10 @@ class Layer7ToolRegistry:
                 continue # data blocks are not tools
 
             if self.dispatcher.is_function_shaped(lang, node.code_content):
-                continue # function-shaped blocks are registered as callables, not orchestration tools
+                # Function-shaped blocks are registered as cross-language callables with the dispatcher.
+                # They are NOT exposed as orchestration tools directly.
+                self.dispatcher.register_function(node.title, lang, node.code_content)
+                continue
 
             tool_name = self._generate_unique_tool_name(node)
 
