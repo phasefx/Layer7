@@ -92,12 +92,17 @@ class SDKMCPServer:
                 pass
 
         async def handle_messages(request):
-            # Standard SSE POST requests
+            # Standard SSE POST requests (with session_id)
             if b"session_id=" in request.scope.get("query_string", b""):
                 await sse.handle_post_message(request.scope, request.receive, request._send)
                 return EmptyResponse()
 
-            # Stateless HTTP JSON-RPC (llama.cpp)
+            # Fallback: if they post to /sse or /messages without a session_id,
+            # assume it's a stateless HTTP client (like llama-ui-mcp)
+            return await handle_stateless_mcp(request)
+
+        async def handle_stateless_mcp(request):
+            """Stateless HTTP JSON-RPC handler for clients like llama-ui-mcp."""
             body_bytes = await request.body()
             try:
                 msg = json.loads(body_bytes.decode("utf-8"))
@@ -164,6 +169,8 @@ class SDKMCPServer:
             routes=[
                 Route("/sse", endpoint=handle_sse, methods=["GET"]),
                 Route("/sse", endpoint=handle_messages, methods=["POST"]),
+                Route("/messages", endpoint=handle_messages, methods=["POST"]),
+                Route("/mcp", endpoint=handle_stateless_mcp, methods=["POST"]),
             ],
             middleware=middleware,
         )
