@@ -92,13 +92,18 @@ class SDKMCPServer:
                 pass
 
         async def handle_messages(request):
+            print(f"[Debug] POST /sse received. Query: {request.scope.get('query_string', b'')} Headers: {request.headers}")
             if b"session_id=" not in request.scope.get("query_string", b""):
-                if hasattr(sse, "_read_stream_writers") and len(sse._read_stream_writers) >= 1:
-                    session_id = list(sse._read_stream_writers.keys())[-1]
+                writers = getattr(sse, "_read_stream_writers", {})
+                print(f"[Debug] Active sessions: {list(writers.keys())}")
+                if len(writers) >= 1:
+                    session_id = list(writers.keys())[-1]
                     qs = request.scope.get("query_string", b"")
                     new_qs = f"session_id={session_id.hex}".encode()
                     request.scope["query_string"] = qs + b"&" + new_qs if qs else new_qs
-                    print(f"Injected missing session_id for client.")
+                    print(f"[Debug] Injected missing session_id: {session_id.hex}")
+                else:
+                    print("[Debug] No active sessions found to inject!")
 
             await sse.handle_post_message(request.scope, request.receive, request._send)
             return EmptyResponse()
