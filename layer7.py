@@ -74,7 +74,7 @@ def execute_linear(all_nodes, dispatcher, resolver):
         # ── Composition blocks: execute inline ───────────────────────
         if lang == "composition":
             print(f"  ⎈  {node.title}  (composition)")
-            comp_engine = CompositionEngine(resolver, dispatcher)
+            comp_engine = CompositionEngine(resolver, dispatcher, all_nodes)
             comp_engine.execute_composition(node.code_content)
             continue
 

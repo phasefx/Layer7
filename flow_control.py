@@ -7,16 +7,27 @@
 # - No-composition default (linear execution)
 
 import re
+from dataclasses import dataclass
+from typing import Optional, Dict, Tuple, List
+from language_integration import ExecutionResult
+
+@dataclass
+class RoutingRule:
+    step: int                  # which step this rule governs
+    repeat: bool               # True = loop; False = run once, still catch sentinel
+    sentinel: str              # what signal to catch ("SKIP")
+    then_goto: Optional[int]   # where to jump after sentinel (None = exit composition)
 
 class CompositionEngine:
     """
     Executes flow control logic based on Steps and Routing headers.
     """
-    def __init__(self, resolver, dispatcher):
+    def __init__(self, resolver, dispatcher, all_nodes=None):
         self.resolver = resolver
         self.dispatcher = dispatcher
+        self.all_nodes = all_nodes or []
 
-    def parse_steps(self, steps_text: str):
+    def parse_steps(self, steps_text: str) -> Dict[int, List[str]]:
         """
         Parses a numbered list of steps, handling chains like:
         1. `NodeA` => `NodeB`
@@ -34,21 +45,63 @@ class CompositionEngine:
                 steps[step_num] = chain
         return steps
 
-    def parse_routing(self, routing_text: str):
+    def parse_routing(self, routing_text: str) -> Tuple[Dict[int, RoutingRule], List[str]]:
         """
         Parses english-like routing rules (e.g. "Repeat step 3 until SKIP, then goto step 2").
-        For now, returns a simple AST or throws a warning for complex unrecognized ones.
+        Returns a simple AST and parse warnings for unrecognized lines.
         """
-        # Placeholder for real routing logic.
-        rules = []
+        rules = {}
+        warnings = []
         for line in routing_text.splitlines():
             line = line.strip()
             if not line:
                 continue
-            if "until SKIP" in line:
-                # Basic parsing
-                rules.append({"type": "repeat_until_skip", "raw": line})
-        return rules
+
+            # Pattern 1: Repeat step X until Y[, then goto step Z].
+            m_repeat = re.match(r'^Repeat step (\d+) until ([a-zA-Z_]+)(?:, then goto step (\d+))?\.?$', line, re.IGNORECASE)
+            if m_repeat:
+                step = int(m_repeat.group(1))
+                sentinel = m_repeat.group(2).upper()
+                then_goto = int(m_repeat.group(3)) if m_repeat.group(3) else None
+                if step in rules:
+                    warnings.append(f"Multiple routing rules for step {step}. Overwriting.")
+                rules[step] = RoutingRule(step=step, repeat=True, sentinel=sentinel, then_goto=then_goto)
+                continue
+
+            # Pattern 2: If step X returns Y, goto step Z.
+            m_if = re.match(r'^If step (\d+) returns ([a-zA-Z_]+), goto step (\d+)\.?$', line, re.IGNORECASE)
+            if m_if:
+                step = int(m_if.group(1))
+                sentinel = m_if.group(2).upper()
+                then_goto = int(m_if.group(3))
+                if step in rules:
+                    warnings.append(f"Multiple routing rules for step {step}. Overwriting.")
+                rules[step] = RoutingRule(step=step, repeat=False, sentinel=sentinel, then_goto=then_goto)
+                continue
+
+            # If we get here, it didn't match the expected syntax
+            warnings.append(f"Unrecognized routing rule: '{line}'")
+
+        return rules, warnings
+
+    def validate_routing(self, steps: Dict[int, List[str]], routing_rules: Dict[int, RoutingRule], parse_warnings: List[str]) -> Dict[int, RoutingRule]:
+        warnings = list(parse_warnings)
+        for rule in routing_rules.values():
+            # Does the rule's target step exist?
+            if rule.step not in steps:
+                warnings.append(f"Routing references step {rule.step}, which doesn't exist in Steps")
+
+            # Does the then_goto step exist?
+            if rule.then_goto is not None and rule.then_goto not in steps:
+                warnings.append(f"Routing 'goto step {rule.then_goto}' references a nonexistent step")
+
+        for w in warnings:
+            print(f"[Warning] {w}")
+
+        # Filter out rules referencing nonexistent steps so they don't crash
+        # the dispatch loop's step_nums.index() call.
+        return {k: v for k, v in routing_rules.items() if k in steps
+                and (v.then_goto is None or v.then_goto in steps)}
 
     def execute_chain(self, chain: list):
         """
@@ -65,32 +118,89 @@ class CompositionEngine:
             elif node == "AMBIGUOUS": # Assuming resolver handles this
                 print(f"[Warning] Composition Step: Ambiguous reference '{ref}'.")
                 continue
-                
+
             # If the node has executable code
             if node.code_content:
+                print(f"  ⎈▶ {node.title}  ({node.code_lang})")
+
+                # Build state from all nodes
+                state = {}
+                for n in self.all_nodes:
+                    if n.data_value is not None:
+                        state[n.title] = n.data_value
+
+                import json
+
+                # Arrow wiring: INPUT (< or <<)
+                stdin_data = None
+                if node.arrow_direction in ('<', '<<') and node.arrow_target:
+                    target = self.resolver.resolve(node.arrow_target)
+                    if target and target.data_value is not None:
+                        stdin_data = json.dumps(target.data_value)
+
                 # Execute it
-                current_val = self.dispatcher.execute(
+                res = self.dispatcher.execute(
                     language=node.code_lang,
                     code=node.code_content,
-                    args=[current_val] if current_val else []
+                    args=[current_val] if current_val else [],
+                    stdin=stdin_data,
+                    state=state
                 )
+
+                # Check for errors as in layer7.py
+                if not res.success:
+                    import sys
+                    print(f"\n[Fatal] '{node.title}' exited with code {res.returncode}")
+                    if res.stderr:
+                        print(res.stderr)
+                    sys.exit(res.returncode)
+
+                if res.stdout:
+                    # Output arrow logic
+                    if node.arrow_direction in ('>', '>>') and node.arrow_target:
+                        target = self.resolver.resolve(node.arrow_target)
+                        if target:
+                            try:
+                                parsed = json.loads(res.stdout)
+                            except json.JSONDecodeError:
+                                parsed = res.stdout
+
+                            if node.arrow_direction == '>':
+                                target.data_value = parsed
+                            else:
+                                if isinstance(target.data_value, list):
+                                    if isinstance(parsed, list):
+                                        target.data_value.extend(parsed)
+                                    else:
+                                        target.data_value.append(parsed)
+                                elif isinstance(target.data_value, dict) and isinstance(parsed, dict):
+                                    target.data_value.update(parsed)
+                                else:
+                                    target.data_value = parsed
+
+                    if node.arrow_direction not in ('>', '>>'):
+                        print(res.stdout, end="" if res.stdout.endswith("\n") else "\n")
+
+                current_val = res.stdout.strip() if res.stdout else ""
+
                 if current_val == "SKIP":
                     return "SKIP"
+
             elif node.data_value is not None:
-                # Or just fetch its data
-                current_val = node.data_value
-                
+                # Or just fetch its data (e.g. JSON/YAML slot)
+                import json
+                current_val = json.dumps(node.data_value) if not isinstance(node.data_value, str) else node.data_value
+
         return current_val
 
     def execute_composition(self, code_content: str):
         """
         Executes a composition DSL string.
         """
-        # A quick hack to parse out Steps and Routing from the composition text
         steps_text = ""
         routing_text = ""
         mode = None
-        
+
         for line in code_content.splitlines():
             if line.lower().startswith("#### steps"):
                 mode = "steps"
@@ -98,19 +208,53 @@ class CompositionEngine:
             elif line.lower().startswith("#### routing"):
                 mode = "routing"
                 continue
-                
+
             if mode == "steps":
                 steps_text += line + "\n"
             elif mode == "routing":
                 routing_text += line + "\n"
-                
+
         steps = self.parse_steps(steps_text)
-        routing = self.parse_routing(routing_text)
-        
-        # Default top-to-bottom execution if no explicit complex routing
-        for step_num in sorted(steps.keys()):
-            chain = steps[step_num]
-            res = self.execute_chain(chain)
-            if res == "SKIP":
-                print(f"Received SKIP at step {step_num}")
-                # handle routing rules for SKIP...
+        raw_rules, parse_warnings = self.parse_routing(routing_text)
+        routing_rules = self.validate_routing(steps, raw_rules, parse_warnings)
+
+        step_nums = sorted(steps.keys())
+        if not step_nums:
+            return
+
+        cursor = 0
+        while 0 <= cursor < len(step_nums):
+            step = step_nums[cursor]
+            chain = steps[step]
+            rule = routing_rules.get(step)
+
+            if rule and rule.repeat:
+                # ── Repeat-until mode ────────────────────────────────
+                while True:
+                    result = self.execute_chain(chain)
+                    if result == rule.sentinel:
+                        # Sentinel caught — follow then_goto or exit
+                        if rule.then_goto is not None:
+                            # Note: Calling index() is O(N), but this is fine
+                            # given the 7-chunk friction principle (N <= 7).
+                            cursor = step_nums.index(rule.then_goto)
+                        else:
+                            return                 # exit composition
+                        break
+                    # No sentinel → loop again
+
+            else:
+                # ── Normal: execute once ─────────────────────────────
+                result = self.execute_chain(chain)
+
+                if result == "SKIP":
+                    if rule and rule.then_goto is not None:
+                        # SKIP override without repeat (the "if step N returns SKIP, goto M" form)
+                        cursor = step_nums.index(rule.then_goto)
+                        continue
+                    else:
+                        # Implicit exit condition if no rule specifies what to do on SKIP
+                        return                     # default: SKIP exits composition
+
+                # Advance to next step
+                cursor += 1
