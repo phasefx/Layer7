@@ -84,7 +84,7 @@ def parse_header_line(line: str) -> Optional[Dict[str, Any]]:
         
     # 2. Extract Inline Variables from the remaining title
     # Matches [] or {} or string at the end of the header
-    inline_var_pattern = r'\s+(\[\]|\{\}|string)$'
+    inline_var_pattern = r'\s+`?(\[\]|\{\}|string)`?$'
     inline_match = re.search(inline_var_pattern, text)
     if inline_match:
         result['inline_var_type'] = inline_match.group(1)
