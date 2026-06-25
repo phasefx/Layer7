@@ -39,7 +39,7 @@ def build_state(nodes):
 
 # ─── Linear execution ───────────────────────────────────────────────────────
 
-def execute_linear(all_nodes, dispatcher, resolver):
+def execute_linear(all_nodes, dispatcher, resolver, program_stdin=""):
     """Default baseline flow: top to bottom.
 
     For each node in document order:
@@ -49,6 +49,8 @@ def execute_linear(all_nodes, dispatcher, resolver):
     3. **Composition blocks** → executed via the CompositionEngine inline
     4. **Regular code blocks** → executed with full preamble + arrow wiring
     """
+    stdin_consumed = False
+
     for node in all_nodes:
         if not node.code_content:
             continue
@@ -92,6 +94,9 @@ def execute_linear(all_nodes, dispatcher, resolver):
             elif target is None:
                 print(f"[Warning] Input arrow target "
                       f"'{node.arrow_target}' not found")
+        elif program_stdin and not stdin_consumed:
+            stdin_data = program_stdin
+            stdin_consumed = True
 
         # Execute
         arrow_label = ""
@@ -141,7 +146,7 @@ def execute_linear(all_nodes, dispatcher, resolver):
 
         # Print stdout for blocks that don't capture output via arrows
         if result.stdout and node.arrow_direction not in ('>', '>>'):
-            print(result.stdout)
+            print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
 
 # ─── Main ────────────────────────────────────────────────────────────────────
 
@@ -158,6 +163,10 @@ def main():
     if not os.path.exists(args.file):
         print(f"Error: File '{args.file}' not found.")
         sys.exit(1)
+
+    program_stdin = ""
+    if not sys.stdin.isatty():
+        program_stdin = sys.stdin.read()
 
     print(f"Layer7 v0.8 — {args.file}")
     print("─" * 40)
@@ -182,7 +191,7 @@ def main():
 
     # Always use linear execution.
     # Compositions execute inline at their position in the document.
-    execute_linear(all_nodes, dispatcher, resolver)
+    execute_linear(all_nodes, dispatcher, resolver, program_stdin=program_stdin)
 
 
 if __name__ == "__main__":
