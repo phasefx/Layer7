@@ -74,7 +74,7 @@ class SDKMCPServer:
             import sys
             sys.exit(1)
 
-        sse = SseServerTransport("/messages")
+        sse = SseServerTransport("/sse")
 
         async def handle_sse(request):
             async with sse.connect_sse(
@@ -96,8 +96,8 @@ class SDKMCPServer:
         starlette_app = Starlette(
             debug=True,
             routes=[
-                Route("/sse", endpoint=handle_sse),
-                Route("/messages", endpoint=handle_messages, methods=["POST"]),
+                Route("/sse", endpoint=handle_sse, methods=["GET"]),
+                Route("/sse", endpoint=handle_messages, methods=["POST"]),
             ],
             middleware=middleware,
         )
