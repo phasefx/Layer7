@@ -154,11 +154,17 @@ def main():
     parser = argparse.ArgumentParser(
         description="Layer7 Engine (v0.8) — "
                     "Polyglot Code Organization for Human Cognition")
+    parser.add_argument("--serve", action="store_true", help="Start MCP server")
+    parser.add_argument("--mode", choices=["debug", "toolkit"], help="MCP server mode")
     parser.add_argument("file", help="The Layer7 Markdown file to execute")
     parser.add_argument("args", nargs="*",
                         help="Arguments passed through to code blocks "
                              "(e.g. an input filename)")
     args = parser.parse_args()
+
+    if args.serve and not args.mode:
+        print("Error: --serve requires --mode=debug or --mode=toolkit")
+        sys.exit(1)
 
     if not os.path.exists(args.file):
         print(f"Error: File '{args.file}' not found.")
@@ -168,8 +174,9 @@ def main():
     if not sys.stdin.isatty():
         program_stdin = sys.stdin.read()
 
-    print(f"Layer7 v0.8 — {args.file}")
-    print("─" * 40)
+    if not args.serve:
+        print(f"Layer7 v0.8 — {args.file}")
+        print("─" * 40)
 
     # 1. Parse markdown file  (core_structure)
     with open(args.file, 'r', encoding='utf-8') as f:
@@ -189,9 +196,14 @@ def main():
     dispatcher = MCPDispatcher(
         program_args=args.args, working_dir=working_dir)
 
-    # Always use linear execution.
-    # Compositions execute inline at their position in the document.
-    execute_linear(all_nodes, dispatcher, resolver, program_stdin=program_stdin)
+    if args.serve:
+        from mcp_server import Layer7MCPServer
+        server = Layer7MCPServer(l7_parser, resolver, dispatcher, mode=args.mode, program_stdin=program_stdin)
+        server.serve_stdio()
+    else:
+        # Always use linear execution.
+        # Compositions execute inline at their position in the document.
+        execute_linear(all_nodes, dispatcher, resolver, program_stdin=program_stdin)
 
 
 if __name__ == "__main__":
