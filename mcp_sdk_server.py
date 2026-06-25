@@ -67,6 +67,7 @@ class SDKMCPServer:
             from starlette.routing import Route
             from starlette.middleware import Middleware
             from starlette.middleware.cors import CORSMiddleware
+            from starlette.responses import Response
             import uvicorn
         except ImportError:
             print("Error: starlette and uvicorn are required for SSE support.")
@@ -86,8 +87,21 @@ class SDKMCPServer:
                     self.app.create_initialization_options()
                 )
 
+        class EmptyResponse(Response):
+            async def __call__(self, scope, receive, send):
+                pass
+
         async def handle_messages(request):
+            if b"session_id=" not in request.scope.get("query_string", b""):
+                if hasattr(sse, "_read_stream_writers") and len(sse._read_stream_writers) >= 1:
+                    session_id = list(sse._read_stream_writers.keys())[-1]
+                    qs = request.scope.get("query_string", b"")
+                    new_qs = f"session_id={session_id.hex}".encode()
+                    request.scope["query_string"] = qs + b"&" + new_qs if qs else new_qs
+                    print(f"Injected missing session_id for client.")
+
             await sse.handle_post_message(request.scope, request.receive, request._send)
+            return EmptyResponse()
 
         middleware = [
             Middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
