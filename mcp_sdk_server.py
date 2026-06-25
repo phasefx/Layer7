@@ -65,6 +65,8 @@ class SDKMCPServer:
             from mcp.server.sse import SseServerTransport
             from starlette.applications import Starlette
             from starlette.routing import Route
+            from starlette.middleware import Middleware
+            from starlette.middleware.cors import CORSMiddleware
             import uvicorn
         except ImportError:
             print("Error: starlette and uvicorn are required for SSE support.")
@@ -87,12 +89,17 @@ class SDKMCPServer:
         async def handle_messages(request):
             await sse.handle_post_message(request.scope, request.receive, request._send)
 
+        middleware = [
+            Middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+        ]
+
         starlette_app = Starlette(
             debug=True,
             routes=[
                 Route("/sse", endpoint=handle_sse),
                 Route("/messages", endpoint=handle_messages, methods=["POST"]),
             ],
+            middleware=middleware,
         )
 
         print(f"Starting Layer7 MCP server on http://{host}:{port}/sse")
