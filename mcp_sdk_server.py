@@ -92,7 +92,15 @@ class SDKMCPServer:
                 pass
 
         async def handle_messages(request):
+            body_bytes = await request.body()
             print(f"[Debug] POST /sse received. Query: {request.scope.get('query_string', b'')} Headers: {request.headers}")
+            print(f"[Debug] POST body: {body_bytes.decode('utf-8', errors='replace')}")
+
+            # Put the body back so handle_post_message can read it
+            async def receive():
+                return {"type": "http.request", "body": body_bytes}
+            request._receive = receive
+
             if b"session_id=" not in request.scope.get("query_string", b""):
                 writers = getattr(sse, "_read_stream_writers", {})
                 print(f"[Debug] Active sessions: {list(writers.keys())}")
@@ -105,7 +113,7 @@ class SDKMCPServer:
                 else:
                     print("[Debug] No active sessions found to inject!")
 
-            await sse.handle_post_message(request.scope, request.receive, request._send)
+            await sse.handle_post_message(request.scope, request._receive, request._send)
             return EmptyResponse()
 
         middleware = [
