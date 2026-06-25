@@ -92,29 +92,68 @@ class SDKMCPServer:
                 pass
 
         async def handle_messages(request):
+            # Standard SSE POST requests
+            if b"session_id=" in request.scope.get("query_string", b""):
+                await sse.handle_post_message(request.scope, request.receive, request._send)
+                return EmptyResponse()
+
+            # Stateless HTTP JSON-RPC (llama.cpp)
             body_bytes = await request.body()
-            print(f"[Debug] POST /sse received. Query: {request.scope.get('query_string', b'')} Headers: {request.headers}")
-            print(f"[Debug] POST body: {body_bytes.decode('utf-8', errors='replace')}")
+            try:
+                msg = json.loads(body_bytes.decode("utf-8"))
+            except Exception:
+                return Response("Invalid JSON", status_code=400)
 
-            # Put the body back so handle_post_message can read it
-            async def receive():
-                return {"type": "http.request", "body": body_bytes}
-            request._receive = receive
+            method = msg.get("method")
+            msg_id = msg.get("id")
 
-            if b"session_id=" not in request.scope.get("query_string", b""):
-                writers = getattr(sse, "_read_stream_writers", {})
-                print(f"[Debug] Active sessions: {list(writers.keys())}")
-                if len(writers) >= 1:
-                    session_id = list(writers.keys())[-1]
-                    qs = request.scope.get("query_string", b"")
-                    new_qs = f"session_id={session_id.hex}".encode()
-                    request.scope["query_string"] = qs + b"&" + new_qs if qs else new_qs
-                    print(f"[Debug] Injected missing session_id: {session_id.hex}")
-                else:
-                    print("[Debug] No active sessions found to inject!")
+            if method == "notifications/initialized":
+                return Response(status_code=204)
 
-            await sse.handle_post_message(request.scope, request._receive, request._send)
-            return EmptyResponse()
+            elif method == "initialize":
+                result = {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "serverInfo": {"name": "Layer7", "version": "0.8"}
+                }
+                return Response(json.dumps({"jsonrpc": "2.0", "id": msg_id, "result": result}), media_type="application/json")
+
+            elif method == "tools/list":
+                tools = []
+                for tool_def in self.registry.get_tools():
+                    tools.append({
+                        "name": tool_def["name"],
+                        "description": tool_def.get("description", ""),
+                        "inputSchema": tool_def.get("inputSchema", {})
+                    })
+                return Response(json.dumps({"jsonrpc": "2.0", "id": msg_id, "result": {"tools": tools}}), media_type="application/json")
+
+            elif method == "tools/call":
+                params = msg.get("params", {})
+                name = params.get("name")
+                arguments = params.get("arguments", {})
+
+                def _run():
+                    with self._lock:
+                        try:
+                            return self.registry.call_tool(name, arguments)
+                        except Exception as e:
+                            return {"error": str(e)}
+
+                res = await asyncio.to_thread(_run)
+                text_content = res if isinstance(res, str) else json.dumps(res, indent=2)
+                content = [{"type": "text", "text": text_content}]
+                return Response(json.dumps({"jsonrpc": "2.0", "id": msg_id, "result": {"content": content}}), media_type="application/json")
+
+            elif method == "ping":
+                return Response(json.dumps({"jsonrpc": "2.0", "id": msg_id, "result": {}}), media_type="application/json")
+
+            else:
+                return Response(json.dumps({
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "error": {"code": -32601, "message": f"Method not found: {method}"}
+                }), media_type="application/json", status_code=404)
 
         middleware = [
             Middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
