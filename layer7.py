@@ -171,7 +171,7 @@ def main():
         sys.exit(1)
 
     program_stdin = ""
-    if not sys.stdin.isatty():
+    if not args.serve and not sys.stdin.isatty():
         program_stdin = sys.stdin.read()
 
     if not args.serve:
@@ -197,8 +197,19 @@ def main():
         program_args=args.args, working_dir=working_dir)
 
     if args.serve:
-        from mcp_server import Layer7MCPServer
-        server = Layer7MCPServer(l7_parser, resolver, dispatcher, mode=args.mode, program_stdin=program_stdin)
+        from mcp_registry import Layer7ToolRegistry
+        registry = Layer7ToolRegistry(l7_parser, resolver, dispatcher, mode=args.mode, program_stdin=program_stdin)
+
+        try:
+            import mcp
+            # Use the official SDK server if available
+            from mcp_sdk_server import SDKMCPServer
+            server = SDKMCPServer(registry)
+        except ImportError:
+            # Fallback to the dependency-free native server
+            from mcp_native_server import NativeMCPServer
+            server = NativeMCPServer(registry)
+
         server.serve_stdio()
     else:
         # Always use linear execution.
