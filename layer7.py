@@ -185,6 +185,7 @@ def main():
         markdown_text = f.read()
 
     l7_parser = Layer7Parser()
+    l7_parser.raw_text = markdown_text
     root_node = l7_parser.parse_text(markdown_text)
     all_nodes = l7_parser.all_nodes
 

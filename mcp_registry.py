@@ -345,16 +345,26 @@ class Layer7ToolRegistry:
 
     def _handle_read_source(self, kwargs):
         header_name = kwargs.get("header_name")
-        # For simplicity, returning the raw content of the target node or whole doc.
+        raw_text = getattr(self.parser, "raw_text", "")
+
         if header_name:
             target = self.resolver.resolve(header_name)
             if not target:
                 return {"error": "Header not found."}
-            return {"source": target.original_text or "(source unavailable)"}
+
+            # Synthesize node source since it's not currently retained verbatim in the tree
+            lines = []
+            lines.append(f"Header: {target.title}")
+            if target.code_lang and target.code_content is not None:
+                lines.append(f"```{target.code_lang}")
+                lines.append(target.code_content)
+                lines.append("```")
+            elif target.data_value is not None:
+                lines.append(f"Current Data Value: {json.dumps(target.data_value)}")
+
+            return {"source": "\n".join(lines) or "(no content)"}
         else:
-            # Return full file content
-            # Assuming nodes[0] is root or we can reconstruct
-            return {"source": "(Imagine full document source here)"}
+            return {"source": raw_text or "(source unavailable)"}
 
     def _handle_layer7_howto(self, kwargs):
         if self.mode == "debug":
