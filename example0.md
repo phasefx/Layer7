@@ -46,11 +46,6 @@ These are about sequencing and control flow, not about what the code does.
 
 These are all about the polyglot nature of Layer7 and how different languages interoperate.
 
-## 5. State Management (how data changes)
-- **Streams** (multiple writers to one header)
-- **State models** (ephemeral vs persistent vs unbounded)
-- **Soft constraints** (linter warnings, documented exceptions)
-
 # Contents
 
 Allow exception: level 4 headers
@@ -117,9 +112,9 @@ If a code block calls `Procedural_Example("hello world")`, then for code like th
 
 If a code block contains only a function, anonymous or otherwise, then an invocation like `Functional_Example("hello world")` will call the function, passing arguments one for one if possible, instead of setting program level arguments. Extra incoming arguments may be get crammed into the last parameter. Redirection may map input from STDIN into the first argument. Normal top to bottom execution just registers the function and moves on.
 
-```Bash
+```Javascript
 function print_me(incoming) {
-    echo "$1"
+    console.log(incoming);
 }
 ```
 
@@ -143,17 +138,18 @@ In this case, we would not replace the value for `Inline Example`, but append to
 
 #### Example 4 <<=== Inline Example
 
-I don't know yet what might reasonably fit here. Maybe nothing. Please tell me what you think.
+Streaming input. Hrmm. Let's skip this one until we hit a need for it.
 
 #### And referencing code block headers here?
 
-This is still up in the air (whether to allow something like `Example 2 ===> Example 1`), but it gets into orchestration/composition territory. But if all things are allowed with justification, may be just throw a warning. Let me know what you think.
+We don't try to handle code block headers pointing to code block headers: `Example 2 ===> Example 1`
+All things allowed with justification... if you implement it. This gets into orchestration territory.
 
 ## 2. Addressing & Naming
 
 Headers are addresses. They are hierarchal and you can express enough of the hierarchy as needed to remove ambiguity. For example, referring to `Functional_Example` within this file will find the `#### Functional Example` header from the Code Blocks section. But if there are more than one these, which we don't recommend doing, you could include more of the full address/pathing, such as `Code_blocks_Functional_Example`, `Core_Structure_Code_blocks_Functional_Example`, or even `filename_Core_Structure_Code_blocks_Functional_Example`--whatever is enough to disambiguate.
 
-All combinations of inclusion or exclusion with these sub-headers is is made available, with ones that show up more than once thrown out as being ambigious. So, for example, filename_Functional_Example may be valid, as well as Core_Structure_Functional_Example. Depending on the target language, using . or :: may be available as the separator. For example, `Code_blocks::Functional_Example`. All lower-case variants will be provided, as well as collapsed space versus underscore as space variants. For example, `FunctionalExample` and `functionalexample` will both usually be permitted, but I don't claim to know how identifiers work in every language we'll be supporting.
+All combinations of inclusion or exclusion with these sub-headers is made available, with ones that show up more than once thrown out as being ambigious. So, for example, filename_Functional_Example may be valid, as well as Core_Structure_Functional_Example. Depending on the target language, using . or :: may be available as the separator. For example, `Code_blocks::Functional_Example`. All lower-case variants will be provided, as well as collapsed space versus underscore as space variants. For example, `FunctionalExample` and `functionalexample` will both usually be permitted, but I don't claim to know how identifiers work in every language we'll be supporting. Is this a good idea? Not really. But it reduces friction at the point of writing. Some code is better than no code. Tooling can help.
 
 Cross-file references are possible, but will generate warnings outside of use by orchestration, though `Allow exception: cross-file reference` may silence those.
 
@@ -173,17 +169,37 @@ This is an empty composition as a code block. No logic in this example. The comp
 
 ### Composition: This is an example header composition. They keyword `Composition`, case-insensitive, triggers it.
 
-The first bit of structure with the composition DSL is a header starting with the keyword `Layers`
+The first bit of structure with the composition DSL is a header starting with the keyword `Steps`
 
-#### Layers
+#### Steps
 
+This is where we're allowed to chain code block headers together. By convention we number the references, but this is only necessary if we need to refer to specific steps that re-use the same Header references. Random text gets ignored.
+
+1. `Non-existent header.`
+
+It's okay to do this. The linter will throw a warning.
+
+2. `Start Screen`
+
+These are being executed as read, left to right, top to bottom. A code block returning 'SKIP' exits the composition by default. The Routing header is where we make exceptions.  Compositions may be followed by other compositions.
+
+3. `Player input` => `Physics engine` => `Render engine`
+
+#### Routing
+
+Repeat step 3 until SKIP, then goto step 2.
+
+Random text gets ignored.  But something like this will throw a warning:
+Repeat step gobbligook until.
 
 ## 4. Language Integration
-- **Cross-language calls** (Perl calling JS, etc.)
-- **Function-shaped headers** (callable chunks)
-- **Mixed languages** (multiple languages per file with exceptions)
 
-## 5. State Management
-- **Streams** (multiple writers to one header)
-- **State models** (ephemeral vs persistent vs unbounded)
-- **Soft constraints** (linter warnings, documented exceptions)
+It's magic and, yes, that can be a bad thing. But we're always building on abstractions upon abstractions. You're squinting at this one because you don't trust it yet.
+
+```Perl
+if ($JSON_Example->player->x == 0 && $JSON_Example->velocity->dx == 0) {
+    some_javascript_could_be_wrapped_by_this('no movement on the X axis');
+}
+```
+
+Yes, now Perl has even _more_ magic variables. :-)
