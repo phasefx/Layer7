@@ -53,7 +53,7 @@ But something like this would be fine.
 
 Allow exception: bash
 ```bash
-jq .
+jq . "${1:-/dev/stdin}"
 ```
 
 We could do something like jq . $1 > ${TheTickets}, but given that The Tickets is a variable, the => in the header may be a good way to handle assignment.
