@@ -248,6 +248,10 @@ K_TYPE=$(echo "$Runtime_State" | jq -r '.k_type')
 V_TYPE=$(echo "$Runtime_State" | jq -r '.v_type')
 EXTRA_ARGS=$(echo "$Runtime_State" | jq -r '.extra_args')
 
+echo -e "\n>>> Invoking llama.cpp:"
+echo "nice -n 15 $BIN --model $MODEL_PATH --ctx-size $CTX --parallel 1 --n-gpu-layers 100 --batch-size $BATCH --cache-type-k $K_TYPE --cache-type-v $V_TYPE --flash-attn on --jinja --host $HOST --port $PORT $EXTRA_ARGS"
+echo
+
 nice -n 15 "$BIN" \
   --model "$MODEL_PATH" \
   --ctx-size "$CTX" \
