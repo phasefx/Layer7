@@ -159,12 +159,12 @@ if model_key == "gemma26":
     model_path = f"{m_dir}/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf"
     mtp_path = f"{m_dir}/gemma-4-26B-A4B-it-Q4_0-MTP.gguf"
     mmproj_path = f"{v_dir}/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL-mmproj-BF16.gguf"
-    extra_args = f"--speculative-model {mtp_path} --spec-type draft-mtp --spec-draft-n-max 3"
+    extra_args = f"-md {mtp_path} --spec-type draft-mtp --spec-draft-n-max 3"
 elif model_key == "gemma31":
     model_path = f"{m_dir}/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf"
     mtp_path = f"{m_dir}/gemma-4-31B-it-Q4_0-MTP.gguf"
     mmproj_path = f"{v_dir}/gemma-4-31B-it-qat-UD-Q4_K_XL-mmproj-BF16.gguf"
-    extra_args = f"--speculative-model {mtp_path} --spec-type draft-mtp --spec-draft-n-max 3"
+    extra_args = f"-md {mtp_path} --spec-type draft-mtp --spec-draft-n-max 3"
 elif model_key == "qwen27":
     model_path = f"{m_dir}/Qwen3.6-27B-UD-Q4_K_XL.gguf"
     mmproj_path = f"{v_dir}/qwen3.6-mmproj-F16.gguf"
