@@ -277,5 +277,26 @@ nice -n 15 "$BIN" \
 
 ### Key Upgrades in this Design:
 * **Vision Isolation Control:** The `Strategy_Injector` evaluates if you asked for `vision_on`. If you choose a model that supports it (like `gemma31`), it appends `--mmproj`. If you choose a model without vision (like `qwencoder30`), it safely ignores the flag and keeps resource usage low.
-* **MTP Auto-Linking:** Choosing `gemma26` or `gemma31` automatically hooks their respective companion MTP files (`--speculative-model`) into the launch command arguments for a zero-effort performance increase.
+* **MTP Auto-Linking:** Choosing `gemma26` or `gemma31` automatically hooks their respective companion MTP files (`-md`) into the launch command arguments for a zero-effort performance increase.
 * **Dynamic Variable Substitution:** Cleanly splits files across your project architecture paths while maintaining simple cognitive buckets that align with how your memory organizes information.
+
+## 6. Llama.cpp Parameter Reference
+
+The `Runtime_Invocation` block executes `llama-server` using several optimized arguments. Here is the rationale based on the `llama.cpp` documentation:
+
+*   **`--model FNAME`**: The main model path to load.
+*   **`--ctx-size N`**: Size of the prompt context (dynamically controlled by the chosen Profile).
+*   **`--parallel 1`**: Sets the number of server slots to 1. Optimized for single-user, heavy reasoning batch processing.
+*   **`--n-gpu-layers 100`**: Max number of layers to store in VRAM. Setting this high (100) ensures we force full GPU offload for the models in the Tier 1 registry.
+*   **`--batch-size N`**: Logical maximum batch size for prompt processing (dynamically controlled by Profile).
+*   **`--cache-type-k TYPE` / `--cache-type-v TYPE`**: KV cache data types. We scale these between `q4_0` and `f16` depending on the Profile to manage VRAM footprint vs accuracy.
+*   **`--flash-attn on`**: Hard-coded to enabled. Flash Attention significantly reduces memory bandwidth requirements during long context generation.
+*   **`--jinja`**: Forces the use of the model's native Jinja template engine for proper chat formatting.
+*   **`--host HOST` / `--port PORT`**: Network binding addresses, controlled by the `Environment_Paths` JSON.
+
+### Optional Extra Arguments (Injected dynamically)
+
+*   **`--mmproj FILE`**: Path to a multimodal projector file. Automatically appended if `vision_on` is passed and the model supports it.
+*   **`-md FNAME`** (formerly `--model-draft`): The draft model path used for speculative decoding (MTP).
+*   **`--spec-type draft-mtp`**: Instructs the server to use the Multi-Token Prediction (MTP) speculative decoding method designed for architectures like Gemma.
+*   **`--spec-draft-n-max 3`**: Maximum number of draft tokens to propose per step (set to 3 for stable acceptance rates).
