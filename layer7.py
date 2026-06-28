@@ -39,7 +39,7 @@ def build_state(nodes):
 
 # ─── Linear execution ───────────────────────────────────────────────────────
 
-def execute_linear(all_nodes, dispatcher, resolver, program_stdin=""):
+def execute_linear(all_nodes, dispatcher, resolver, program_stdin="", silent=False):
     """Default baseline flow: top to bottom.
 
     For each node in document order:
@@ -104,8 +104,11 @@ def execute_linear(all_nodes, dispatcher, resolver, program_stdin=""):
             arrow_label = f"  {node.arrow_direction} {node.arrow_target}"
         print(f"  ▶  {node.title}  ({lang}{arrow_label})")
 
+        # Determine if we should capture output
+        capture_output = silent or (node.arrow_direction in ('>', '>>'))
+
         result = dispatcher.execute(
-            lang, node.code_content, stdin=stdin_data, state=state)
+            lang, node.code_content, stdin=stdin_data, state=state, capture_output=capture_output)
 
         # Arrow wiring: OUTPUT  (> or >>)
         if node.arrow_direction in ('>', '>>') and node.arrow_target:
@@ -145,7 +148,7 @@ def execute_linear(all_nodes, dispatcher, resolver, program_stdin=""):
             sys.exit(result.returncode)
 
         # Print stdout for blocks that don't capture output via arrows
-        if result.stdout and node.arrow_direction not in ('>', '>>'):
+        if result.stdout and node.arrow_direction not in ('>', '>>') and not silent:
             print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
 
 # ─── Main ────────────────────────────────────────────────────────────────────
@@ -155,6 +158,7 @@ def main():
         description="Layer7 Engine (v0.8) — "
                     "Polyglot Code Organization for Human Cognition")
     parser.add_argument("--serve", action="store_true", help="Start MCP server")
+    parser.add_argument("--silent", action="store_true", help="Suppress live console output for commands without output arrows")
     parser.add_argument("--mode", choices=["debug", "toolkit"], help="MCP server mode")
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind for SSE server (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, help="Port to bind for SSE server (triggers network mode)")
@@ -224,7 +228,7 @@ def main():
     else:
         # Always use linear execution.
         # Compositions execute inline at their position in the document.
-        execute_linear(all_nodes, dispatcher, resolver, program_stdin=program_stdin)
+        execute_linear(all_nodes, dispatcher, resolver, program_stdin=program_stdin, silent=args.silent)
 
 
 if __name__ == "__main__":

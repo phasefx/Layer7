@@ -395,7 +395,8 @@ class MCPDispatcher:
     # ─── Execution ───────────────────────────────────────────────────────
 
     def execute(self, language: str, code: str, args: List[Any] = None,
-                stdin: str = None, state: Dict[str, Any] = None) -> ExecutionResult:
+                stdin: str = None, state: Dict[str, Any] = None,
+                capture_output: bool = True) -> ExecutionResult:
         """Execute a code block with full preamble injection.
 
         Args:
@@ -404,6 +405,7 @@ class MCPDispatcher:
             args: Command-line arguments.  Defaults to ``self.program_args``.
             stdin: Data to pipe to stdin (for ``<`` arrow blocks).
             state: ``{header_title: data_value}`` for preamble injection.
+            capture_output: If False, stdout and stderr stream directly to console.
 
         Returns:
             `ExecutionResult` with stdout, stderr, returncode.
@@ -443,8 +445,8 @@ class MCPDispatcher:
         process = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE if capture_output else None,
+            stderr=subprocess.PIPE if capture_output else None,
             text=True,
             env=env,
             cwd=self.working_dir,
