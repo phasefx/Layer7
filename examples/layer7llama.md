@@ -148,28 +148,29 @@ if [ "$#" -lt 2 ]; then
 fi
 ```
 
-### Argument_Parser
+#### Llama_Runner
 
-Translates incoming CLI inputs into structured environment parameters.
+Resolves variables and executes the local llama-server instance.
 
 ```Bash
+# Helper function to parse JSON variables injected by the Layer7 engine
+get_l7_var() {
+    python3 -c "import json, os; print(json.loads(os.environ.get('$1', '{}')).get('$2', ''))"
+}
+
+# 1. Parse Arguments
 MODEL_KEY="${1,,}"
 PROFILE_NAME="${2,,}"
 VISION_TOGGLE="${3,,:-vision_off}"
 
-# Set paths from Layer7 configuration targets
-BIN=$Environment_Paths.llama_bin
-M_DIR=$Environment_Paths.models_dir
-V_DIR=$Environment_Paths.mmproj_dir
+# 2. Extract paths from Environment_Paths target
+BIN=$(get_l7_var Environment_Paths llama_bin)
+M_DIR=$(get_l7_var Environment_Paths models_dir)
+V_DIR=$(get_l7_var Environment_Paths mmproj_dir)
+HOST=$(get_l7_var Environment_Paths host)
+PORT=$(get_l7_var Environment_Paths port)
 
-EXTRA_ARGS=""
-```
-
-### Model_Resolver
-
-Resolves shorthand keys into exact target paths, speculative configurations, and matching multimodal project tracks.
-
-```Bash
+# 3. Model Resolver
 case "$MODEL_KEY" in
     "gemma26")
         MODEL_PATH="$M_DIR/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf"
@@ -200,56 +201,48 @@ case "$MODEL_KEY" in
         MMPROJ_PATH="$V_DIR/Qwen3-Coder-Next-UD-Q4_K_XL-mmproj-BF16.gguf"
         ;;
     *)
-        echo "Error: Unknown model key assignment."
+        echo "Error: Unknown model key assignment '$MODEL_KEY'." >&2
         exit 1
         ;;
 esac
 
-```
-
-### Strategy_Injector
-
-Applies runtime profile data parameters and hooks the vision projector layer if requested and available.
-
-```Bash
+# 4. Strategy Injector
 case "$PROFILE_NAME" in
     "speed")
-        CTX=$Speed_Profile.ctx
-        K_TYPE=$Speed_Profile.k_type
-        V_TYPE=$Speed_Profile.v_type
-        BATCH=$Speed_Profile.batch
+        CTX=$(get_l7_var Speed_Profile ctx)
+        K_TYPE=$(get_l7_var Speed_Profile k_type)
+        V_TYPE=$(get_l7_var Speed_Profile v_type)
+        BATCH=$(get_l7_var Speed_Profile batch)
         ;;
     "accuracy")
-        CTX=$Accuracy_Profile.ctx
-        K_TYPE=$Accuracy_Profile.k_type
-        V_TYPE=$Accuracy_Profile.v_type
-        BATCH=$Accuracy_Profile.batch
+        CTX=$(get_l7_var Accuracy_Profile ctx)
+        K_TYPE=$(get_l7_var Accuracy_Profile k_type)
+        V_TYPE=$(get_l7_var Accuracy_Profile v_type)
+        BATCH=$(get_l7_var Accuracy_Profile batch)
         ;;
     "space")
-        CTX=$Space_Profile.ctx
-        K_TYPE=$Space_Profile.k_type
-        V_TYPE=$Space_Profile.v_type
-        BATCH=$Space_Profile.batch
+        CTX=$(get_l7_var Space_Profile ctx)
+        K_TYPE=$(get_l7_var Space_Profile k_type)
+        V_TYPE=$(get_l7_var Space_Profile v_type)
+        BATCH=$(get_l7_var Space_Profile batch)
+        ;;
+    *)
+        echo "Error: Unknown profile name '$PROFILE_NAME'." >&2
+        exit 1
         ;;
 esac
 
 # Evaluate Multimodal vision request rules
 if [ "$VISION_TOGGLE" = "vision_on" ]; then
     if [ -n "$MMPROJ_PATH" ] && [ -f "$MMPROJ_PATH" ]; then
-        echo ">>> Vision active: Injecting multimodal matrix mapping"
+        echo ">>> Vision active: Injecting multimodal matrix mapping" >&2
         EXTRA_ARGS="$EXTRA_ARGS --mmproj $MMPROJ_PATH"
     else
-        echo ">>> Warning: Vision requested, but model choice lacks matching project block."
+        echo ">>> Warning: Vision requested, but model choice lacks matching project block." >&2
     fi
 fi
 
-```
-
-### Runtime_Invocation
-
-Fires the optimized compute loop cleanly onto target hardware execution threads.
-
-```Bash
+# 5. Runtime Invocation
 nice -n 15 "$BIN" \
   --model "$MODEL_PATH" \
   --ctx-size "$CTX" \
@@ -260,17 +253,16 @@ nice -n 15 "$BIN" \
   --cache-type-v "$V_TYPE" \
   --flash-attn on \
   --jinja \
-  --host $Environment_Paths.host \
-  --port $Environment_Paths.port \
+  --host "$HOST" \
+  --port "$PORT" \
   $EXTRA_ARGS
-
 ```
 
 ## 5. Workflow Manifest
 
 ### Steps
 
-1. `Argument_Parser` => `Model_Resolver` => `Strategy_Injector` => `Runtime_Invocation`
+1. `Usage_Guard` => `Llama_Runner`
 
 ```
 
