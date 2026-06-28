@@ -148,29 +148,37 @@ if [ "$#" -lt 2 ]; then
 fi
 ```
 
-#### Llama_Runner
+### Runtime_State {}
 
-Resolves variables and executes the local llama-server instance.
+Holds the accumulated parameters during execution steps.
+
+### Argument_Parser ===>> Runtime_State
+
+Translates incoming CLI inputs into structured environment parameters.
 
 ```Bash
-# Helper function to parse JSON variables injected by the Layer7 engine
-get_l7_var() {
+echo "{\"model_key\": \"${1,,}\", \"profile\": \"${2,,}\", \"vision\": \"${3,,:-vision_off}\"}"
+```
+
+### Model_Resolver ===>> Runtime_State
+
+Resolves shorthand keys into exact target paths, speculative configurations, and matching multimodal project tracks.
+
+```Bash
+# Helper function to get values from JSON strings
+get_val() {
     python3 -c "import json, os; print(json.loads(os.environ.get('$1', '{}')).get('$2', ''))"
 }
 
-# 1. Parse Arguments
-MODEL_KEY="${1,,}"
-PROFILE_NAME="${2,,}"
-VISION_TOGGLE="${3,,:-vision_off}"
+# Extract directory targets from Environment_Paths
+M_DIR=$(get_val Environment_Paths models_dir)
+V_DIR=$(get_val Environment_Paths mmproj_dir)
 
-# 2. Extract paths from Environment_Paths target
-BIN=$(get_l7_var Environment_Paths llama_bin)
-M_DIR=$(get_l7_var Environment_Paths models_dir)
-V_DIR=$(get_l7_var Environment_Paths mmproj_dir)
-HOST=$(get_l7_var Environment_Paths host)
-PORT=$(get_l7_var Environment_Paths port)
+# Read chosen model key
+MODEL_KEY=$(get_val Runtime_State model_key)
 
-# 3. Model Resolver
+EXTRA_ARGS=""
+
 case "$MODEL_KEY" in
     "gemma26")
         MODEL_PATH="$M_DIR/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf"
@@ -206,33 +214,36 @@ case "$MODEL_KEY" in
         ;;
 esac
 
-# 4. Strategy Injector
+# Output outputs as JSON to merge into Runtime_State
+python3 -c "import json; print(json.dumps({'model_path': '$MODEL_PATH', 'mtp_path': '$MTP_PATH', 'mmproj_path': '$MMPROJ_PATH', 'extra_args': '$EXTRA_ARGS'}))"
+```
+
+### Strategy_Injector ===>> Runtime_State
+
+Applies runtime profile data parameters and hooks the vision projector layer if requested and available.
+
+```Bash
+get_val() {
+    python3 -c "import json, os; print(json.loads(os.environ.get('$1', '{}')).get('$2', ''))"
+}
+
+PROFILE_NAME=$(get_val Runtime_State profile)
+VISION_TOGGLE=$(get_val Runtime_State vision)
+MMPROJ_PATH=$(get_val Runtime_State mmproj_path)
+EXTRA_ARGS=$(get_val Runtime_State extra_args)
+
+# Match selected profile configuration
 case "$PROFILE_NAME" in
-    "speed")
-        CTX=$(get_l7_var Speed_Profile ctx)
-        K_TYPE=$(get_l7_var Speed_Profile k_type)
-        V_TYPE=$(get_l7_var Speed_Profile v_type)
-        BATCH=$(get_l7_var Speed_Profile batch)
-        ;;
-    "accuracy")
-        CTX=$(get_l7_var Accuracy_Profile ctx)
-        K_TYPE=$(get_l7_var Accuracy_Profile k_type)
-        V_TYPE=$(get_l7_var Accuracy_Profile v_type)
-        BATCH=$(get_l7_var Accuracy_Profile batch)
-        ;;
-    "space")
-        CTX=$(get_l7_var Space_Profile ctx)
-        K_TYPE=$(get_l7_var Space_Profile k_type)
-        V_TYPE=$(get_l7_var Space_Profile v_type)
-        BATCH=$(get_l7_var Space_Profile batch)
-        ;;
-    *)
-        echo "Error: Unknown profile name '$PROFILE_NAME'." >&2
-        exit 1
-        ;;
+    "speed") PROFILE_VAR="Speed_Profile" ;;
+    "accuracy") PROFILE_VAR="Accuracy_Profile" ;;
+    "space") PROFILE_VAR="Space_Profile" ;;
 esac
 
-# Evaluate Multimodal vision request rules
+CTX=$(get_val "$PROFILE_VAR" ctx)
+K_TYPE=$(get_val "$PROFILE_VAR" k_type)
+V_TYPE=$(get_val "$PROFILE_VAR" v_type)
+BATCH=$(get_val "$PROFILE_VAR" batch)
+
 if [ "$VISION_TOGGLE" = "vision_on" ]; then
     if [ -n "$MMPROJ_PATH" ] && [ -f "$MMPROJ_PATH" ]; then
         echo ">>> Vision active: Injecting multimodal matrix mapping" >&2
@@ -242,7 +253,31 @@ if [ "$VISION_TOGGLE" = "vision_on" ]; then
     fi
 fi
 
-# 5. Runtime Invocation
+python3 -c "import json; print(json.dumps({'ctx': '$CTX', 'k_type': '$K_TYPE', 'v_type': '$V_TYPE', 'batch': '$BATCH', 'extra_args': '$EXTRA_ARGS'}))"
+```
+
+### Runtime_Invocation
+
+Fires the optimized compute loop cleanly onto target hardware execution threads.
+
+```Bash
+get_val() {
+    python3 -c "import json, os; print(json.loads(os.environ.get('$1', '{}')).get('$2', ''))"
+}
+
+# Global Paths
+BIN=$(get_val Environment_Paths llama_bin)
+HOST=$(get_val Environment_Paths host)
+PORT=$(get_val Environment_Paths port)
+
+# Configured state parameters
+MODEL_PATH=$(get_val Runtime_State model_path)
+CTX=$(get_val Runtime_State ctx)
+BATCH=$(get_val Runtime_State batch)
+K_TYPE=$(get_val Runtime_State k_type)
+V_TYPE=$(get_val Runtime_State v_type)
+EXTRA_ARGS=$(get_val Runtime_State extra_args)
+
 nice -n 15 "$BIN" \
   --model "$MODEL_PATH" \
   --ctx-size "$CTX" \
@@ -262,7 +297,7 @@ nice -n 15 "$BIN" \
 
 ### Steps
 
-1. `Usage_Guard` => `Llama_Runner`
+1. `Usage_Guard` => `Argument_Parser` => `Model_Resolver` => `Strategy_Injector` => `Runtime_Invocation`
 
 ```
 
