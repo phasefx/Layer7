@@ -29,6 +29,19 @@ It is explicitly *not* aimed at large enterprise teams.
 - (Optional) `pip install pyyaml` for YAML data blocks
 - (Optional, for MCP server) `pip install "mcp[cli]" starlette uvicorn`
 
+### Install (optional)
+
+```bash
+pip install -e .[dev]
+# or for specific features
+pip install -e .[yaml,mcp]
+
+# After install the `layer7` command becomes available:
+layer7 --help
+```
+
+You can still run directly with `python3 layer7.py ...` without installing.
+
 ### Run an example
 
 ```bash

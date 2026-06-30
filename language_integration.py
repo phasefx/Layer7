@@ -446,17 +446,23 @@ class MCPDispatcher:
             cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE if capture_output else None,
-            stderr=subprocess.PIPE if capture_output else None,
+            stderr=subprocess.PIPE,  # always capture stderr so errors are never lost
             text=True,
             env=env,
             cwd=self.working_dir,
         )
         stdout, stderr = process.communicate(input=stdin)
 
-        # Always return strings (capture=False uses process inheritance for live output;
+        stderr = stderr or ""
+        if stderr:
+            # Surface errors/warnings even in live (non-capture) mode
+            import sys as _sys
+            _sys.stderr.write(stderr if stderr.endswith("\n") else stderr + "\n")
+
+        # Always return strings (capture=False uses process inheritance for live stdout;
         # we return '' so callers don't double-print or crash on None).
         stdout = stdout.rstrip('\n') if stdout else ""
-        stderr = stderr.rstrip('\n') if stderr else ""
+        stderr = stderr.rstrip('\n')
 
         return ExecutionResult(
             stdout=stdout,
