@@ -123,7 +123,10 @@ def execute_linear(all_nodes, dispatcher, resolver, program_stdin="", silent=Fal
         if not result.success:
             print(f"\n[Fatal] '{node.title}' exited with code"
                   f" {result.returncode}")
-            if result.stderr:
+            # Only reprint stderr here if we captured it. In live (non-capture)
+            # mode the child inherited stderr and the user already saw the
+            # output as it happened.
+            if result.stderr and capture_output:
                 print(result.stderr)
             sys.exit(result.returncode)
 
@@ -156,6 +159,19 @@ def main():
         print(f"Error: File '{args.file}' not found.")
         sys.exit(1)
 
+    # Resolve extra positional args relative to the directory the user
+    # invoked the command from. We deliberately chdir subprocesses to the
+    # directory containing the .md file, so user-supplied filenames (like
+    # "examples/good_tickets.json") must be turned into absolute paths so
+    # they remain valid inside the child's (different) cwd.
+    invocation_dir = os.getcwd()
+    resolved_args = []
+    for a in args.args:
+        if os.path.isabs(a):
+            resolved_args.append(a)
+        else:
+            resolved_args.append(os.path.abspath(os.path.join(invocation_dir, a)))
+
     program_stdin = ""
     if not args.serve and not sys.stdin.isatty():
         program_stdin = sys.stdin.read()
@@ -185,7 +201,7 @@ def main():
     # 3. Execution  (flow_control + language_integration)
     working_dir = os.path.dirname(os.path.abspath(args.file))
     dispatcher = MCPDispatcher(
-        program_args=args.args, working_dir=working_dir)
+        program_args=resolved_args, working_dir=working_dir)
 
     if args.serve:
         from mcp_registry import Layer7ToolRegistry
