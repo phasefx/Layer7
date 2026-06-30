@@ -29,6 +29,32 @@ from language_integration import (
     apply_arrow_output,
 )
 
+# Optional YAML support (pip install pyyaml)
+try:
+    import yaml  # type: ignore
+    HAS_YAML = True
+except ImportError:
+    HAS_YAML = False
+    yaml = None  # type: ignore
+
+
+def parse_data_blocks(nodes):
+    """Ensure YAML missing warning is shown when yaml blocks are present.
+
+    (JSON/YAML data parsing now happens inside Layer7Parser for both
+    linear and MCP paths. This only surfaces the actionable warning.)
+    """
+    for node in nodes:
+        if not node.code_content:
+            continue
+        lang = (node.code_lang or "").lower()
+        if lang == "yaml" and not HAS_YAML:
+            print("[Warning] YAML data block encountered but PyYAML not installed. "
+                  "pip install pyyaml to enable.")
+            # Only warn once per doc even if multiple yaml blocks
+            return
+
+
 # ─── Linear execution ───────────────────────────────────────────────────────
 # Uses shared build_state / arrow helpers from language_integration.
 
@@ -50,14 +76,8 @@ def execute_linear(all_nodes, dispatcher, resolver, program_stdin="", silent=Fal
 
         lang = (node.code_lang or "").lower()
 
-        # ── Data blocks ──────────────────────────────────────────────
+        # Data blocks are already parsed upfront via parse_data_blocks()
         if lang in ("json", "yaml"):
-            try:
-                if lang == "json":
-                    node.data_value = json.loads(node.code_content)
-                # YAML: add PyYAML when needed
-            except Exception as e:
-                print(f"[Warning] Failed to parse data at '{node.title}': {e}")
             continue
 
         # ── Function-shaped blocks: register, don't execute ──────────
@@ -152,6 +172,10 @@ def main():
     l7_parser.raw_text = markdown_text
     root_node = l7_parser.parse_text(markdown_text)
     all_nodes = l7_parser.all_nodes
+
+    # Parse data blocks (JSON always, YAML if PyYAML present) — happens early
+    # so data is available for both linear execution and MCP server modes.
+    parse_data_blocks(all_nodes)
 
     # 2. Register addresses  (addressing)
     resolver = AddressResolver()

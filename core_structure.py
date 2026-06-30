@@ -180,5 +180,36 @@ class Layer7Parser:
                 if not has_allow:
                     print(f"[Warning] Friction principle: Header '{node.title}' has {len(node.children)} children (> 7). Consider breaking it down or add 'Allow exception: 7-chunk'.")
 
+        # Populate data_value for JSON/YAML blocks right after parsing
+        # (YAML support is optional; see parse_data_blocks).
+        self._parse_data_blocks()
         return self.root
+
+    def _parse_data_blocks(self):
+        """Internal: parse ```json and ```yaml blocks into data_value (best effort)."""
+        import json as _json
+        try:
+            import yaml as _yaml  # type: ignore
+            _has_yaml = True
+        except ImportError:
+            _has_yaml = False
+            _yaml = None  # type: ignore
+
+        for node in self.all_nodes:
+            if not node.code_content:
+                continue
+            lang = (node.code_lang or "").lower()
+            if lang not in ("json", "yaml"):
+                continue
+            try:
+                if lang == "json":
+                    node.data_value = _json.loads(node.code_content)
+                elif lang == "yaml" and _has_yaml:
+                    node.data_value = _yaml.safe_load(node.code_content)
+                elif lang == "yaml":
+                    # Don't spam during import/parse; warning issued at exec time if needed
+                    pass
+            except Exception:
+                # Leave data_value as None; warning can be issued by caller
+                pass
 
