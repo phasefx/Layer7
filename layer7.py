@@ -21,23 +21,16 @@ import os
 from core_structure import Layer7Parser
 from addressing import AddressResolver
 from flow_control import CompositionEngine
-from language_integration import MCPDispatcher, ExecutionResult
-
-# ─── State helpers ───────────────────────────────────────────────────────────
-
-def build_state(nodes):
-    """Collect every header variable that currently holds data.
-
-    Called fresh before each code block execution so the state dict reflects
-    all changes made by prior blocks (e.g. ``>`` arrow writes).
-    """
-    state = {}
-    for node in nodes:
-        if node.data_value is not None:
-            state[node.title] = node.data_value
-    return state
+from language_integration import (
+    MCPDispatcher,
+    ExecutionResult,
+    build_state,
+    get_arrow_input_data,
+    apply_arrow_output,
+)
 
 # ─── Linear execution ───────────────────────────────────────────────────────
+# Uses shared build_state / arrow helpers from language_integration.
 
 def execute_linear(all_nodes, dispatcher, resolver, program_stdin="", silent=False):
     """Default baseline flow: top to bottom.
@@ -86,15 +79,8 @@ def execute_linear(all_nodes, dispatcher, resolver, program_stdin="", silent=Fal
         state = build_state(all_nodes)
 
         # Arrow wiring: INPUT  (< or <<)
-        stdin_data = None
-        if node.arrow_direction in ('<', '<<') and node.arrow_target:
-            target = resolver.resolve(node.arrow_target)
-            if target and target.data_value is not None:
-                stdin_data = json.dumps(target.data_value)
-            elif target is None:
-                print(f"[Warning] Input arrow target "
-                      f"'{node.arrow_target}' not found")
-        elif program_stdin and not stdin_consumed:
+        stdin_data = get_arrow_input_data(node, resolver)
+        if stdin_data is None and program_stdin and not stdin_consumed:
             stdin_data = program_stdin
             stdin_consumed = True
 
@@ -111,33 +97,7 @@ def execute_linear(all_nodes, dispatcher, resolver, program_stdin="", silent=Fal
             lang, node.code_content, stdin=stdin_data, state=state, capture_output=capture_output)
 
         # Arrow wiring: OUTPUT  (> or >>)
-        if node.arrow_direction in ('>', '>>') and node.arrow_target:
-            target = resolver.resolve(node.arrow_target)
-            if target is None:
-                print(f"[Warning] Output arrow target "
-                      f"'{node.arrow_target}' not found")
-            elif result.stdout:
-                try:
-                    parsed = json.loads(result.stdout)
-                except json.JSONDecodeError:
-                    parsed = result.stdout
-
-                if node.arrow_direction == '>':
-                    # Replace
-                    target.data_value = parsed
-                else:
-                    # Append (>>)
-                    if isinstance(target.data_value, list):
-                        if isinstance(parsed, list):
-                            target.data_value.extend(parsed)
-                        else:
-                            target.data_value.append(parsed)
-                    elif (isinstance(target.data_value, dict)
-                          and isinstance(parsed, dict)):
-                        target.data_value.update(parsed)
-                    else:
-                        # Can't meaningfully append — overwrite
-                        target.data_value = parsed
+        apply_arrow_output(node, resolver, result.stdout)
 
         # Error propagation: non-zero exit is fatal
         if not result.success:

@@ -7,9 +7,15 @@
 # - No-composition default (linear execution)
 
 import re
+import json
 from dataclasses import dataclass
 from typing import Optional, Dict, Tuple, List
-from language_integration import ExecutionResult
+from language_integration import (
+    ExecutionResult,
+    build_state,
+    get_arrow_input_data,
+    apply_arrow_output,
+)
 
 @dataclass
 class RoutingRule:
@@ -123,20 +129,9 @@ class CompositionEngine:
             if node.code_content:
                 print(f"  ⎈▶ {node.title}  ({node.code_lang})")
 
-                # Build state from all nodes
-                state = {}
-                for n in self.all_nodes:
-                    if n.data_value is not None:
-                        state[n.title] = n.data_value
-
-                import json
-
-                # Arrow wiring: INPUT (< or <<)
-                stdin_data = None
-                if node.arrow_direction in ('<', '<<') and node.arrow_target:
-                    target = self.resolver.resolve(node.arrow_target)
-                    if target and target.data_value is not None:
-                        stdin_data = json.dumps(target.data_value)
+                # Build state + arrow input using shared helpers
+                state = build_state(self.all_nodes)
+                stdin_data = get_arrow_input_data(node, self.resolver)
 
                 # Execute it
                 res = self.dispatcher.execute(
@@ -156,27 +151,8 @@ class CompositionEngine:
                     sys.exit(res.returncode)
 
                 if res.stdout:
-                    # Output arrow logic
-                    if node.arrow_direction in ('>', '>>') and node.arrow_target:
-                        target = self.resolver.resolve(node.arrow_target)
-                        if target:
-                            try:
-                                parsed = json.loads(res.stdout)
-                            except json.JSONDecodeError:
-                                parsed = res.stdout
-
-                            if node.arrow_direction == '>':
-                                target.data_value = parsed
-                            else:
-                                if isinstance(target.data_value, list):
-                                    if isinstance(parsed, list):
-                                        target.data_value.extend(parsed)
-                                    else:
-                                        target.data_value.append(parsed)
-                                elif isinstance(target.data_value, dict) and isinstance(parsed, dict):
-                                    target.data_value.update(parsed)
-                                else:
-                                    target.data_value = parsed
+                    # Output arrow logic (shared helper)
+                    apply_arrow_output(node, self.resolver, res.stdout)
 
                     if node.arrow_direction not in ('>', '>>'):
                         print(res.stdout, end="" if res.stdout.endswith("\n") else "\n")
@@ -188,7 +164,6 @@ class CompositionEngine:
 
             elif node.data_value is not None:
                 # Or just fetch its data (e.g. JSON/YAML slot)
-                import json
                 current_val = json.dumps(node.data_value) if not isinstance(node.data_value, str) else node.data_value
 
         return current_val

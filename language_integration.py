@@ -463,3 +463,68 @@ class MCPDispatcher:
             stderr=stderr,
             returncode=process.returncode,
         )
+
+
+# ─── Shared execution helpers (dedup between linear exec and compositions) ───
+
+def build_state(nodes):
+    """Collect every header variable that currently holds data.
+
+    Called fresh before each code block execution so the state dict reflects
+    all changes made by prior blocks (e.g. ``>`` arrow writes).
+    """
+    state = {}
+    for node in nodes:
+        if node.data_value is not None:
+            state[node.title] = node.data_value
+    return state
+
+
+def get_arrow_input_data(node, resolver):
+    """Return JSON string for stdin if the node header has an input arrow (< or <<)."""
+    if node.arrow_direction in ('<', '<<') and node.arrow_target:
+        target = resolver.resolve(node.arrow_target)
+        if target and target.data_value is not None:
+            return json.dumps(target.data_value)
+        elif target is None:
+            print(f"[Warning] Input arrow target "
+                  f"'{node.arrow_target}' not found")
+    return None
+
+
+def apply_arrow_output(node, resolver, stdout_text):
+    """If the node has > or >> output arrow, parse stdout and write/append to target.
+
+    Returns True if an output arrow was applied.
+    """
+    if node.arrow_direction not in ('>', '>>') or not node.arrow_target:
+        return False
+    target = resolver.resolve(node.arrow_target)
+    if target is None:
+        print(f"[Warning] Output arrow target "
+              f"'{node.arrow_target}' not found")
+        return False
+    if not stdout_text:
+        return False
+    try:
+        parsed = json.loads(stdout_text)
+    except json.JSONDecodeError:
+        parsed = stdout_text
+
+    if node.arrow_direction == '>':
+        # Replace
+        target.data_value = parsed
+    else:
+        # Append (>>)
+        if isinstance(target.data_value, list):
+            if isinstance(parsed, list):
+                target.data_value.extend(parsed)
+            else:
+                target.data_value.append(parsed)
+        elif (isinstance(target.data_value, dict)
+              and isinstance(parsed, dict)):
+            target.data_value.update(parsed)
+        else:
+            # Can't meaningfully append — overwrite
+            target.data_value = parsed
+    return True
