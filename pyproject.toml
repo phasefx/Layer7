@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "layer7"
+version = "0.8.0"
+description = "Polyglot Code Organization for Human Cognition — literate programming in Markdown with mixed languages and visual dataflow."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+  {name = "Layer7 contributors"}
+]
+keywords = ["literate-programming", "markdown", "polyglot", "mcp", "llm-tools"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Text Processing :: Markup :: Markdown",
+]
+
+dependencies = []
+
+[project.optional-dependencies]
+yaml = ["PyYAML>=6.0"]
+mcp = [
+    "mcp[cli]>=1.0",
+    "starlette>=0.37",
+    "uvicorn>=0.30",
+]
+dev = [
+    "PyYAML>=6.0",
+    "pytest>=8.0",
+]
+
+[project.scripts]
+layer7 = "layer7:main"
+
+[project.urls]
+Homepage = "https://github.com/example/layer7"
+Documentation = "Layer7_Design.md"
+
+[tool.setuptools]
+py-modules = [
+    "layer7",
+    "core_structure",
+    "addressing",
+    "flow_control",
+    "language_integration",
+    "mcp_native_server",
+    "mcp_registry",
+    "mcp_sdk_server",
+]
+
+[tool.setuptools.package-data]
+"*" = ["*.md", "examples/*", "test/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+python_files = ["test_*.py", "*_test.py"]

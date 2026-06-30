@@ -1,0 +1,7 @@
+# Layer7 core has no hard runtime dependencies.
+# Optional (enable with pip install -r requirements.txt or the extras):
+PyYAML>=6.0
+# For --serve with full MCP SDK + HTTP/SSE:
+mcp[cli]>=1.0
+starlette>=0.37
+uvicorn>=0.30
