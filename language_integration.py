@@ -453,8 +453,13 @@ class MCPDispatcher:
         )
         stdout, stderr = process.communicate(input=stdin)
 
+        # Always return strings (capture=False uses process inheritance for live output;
+        # we return '' so callers don't double-print or crash on None).
+        stdout = stdout.rstrip('\n') if stdout else ""
+        stderr = stderr.rstrip('\n') if stderr else ""
+
         return ExecutionResult(
-            stdout=stdout.rstrip('\n'),
-            stderr=stderr.rstrip('\n'),
+            stdout=stdout,
+            stderr=stderr,
             returncode=process.returncode,
         )
