@@ -152,7 +152,8 @@ def execute_linear(all_nodes, dispatcher, resolver, program_stdin="", silent=Fal
                         print(f"{k}: <Unserializable: {e}>")
                 sys.exit(result.returncode)
             else:
-                print(f"\n[Fatal] '{node.title}' exited with code"
+                start_note = f" (Starts at Markdown Line: {node.start_line})" if node.start_line is not None else ""
+                print(f"\n[Fatal] '{node.title}'{start_note} exited with code"
                       f" {result.returncode}")
                 # Only reprint stderr here if we captured it. In live (non-capture)
                 # mode the child inherited stderr and the user already saw the
