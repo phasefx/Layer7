@@ -23,6 +23,8 @@ class HeaderNode:
     inline_var_type: Optional[str] = None  # e.g., '[]', '{}', 'string'
     code_lang: Optional[str] = None        # e.g., 'Python', 'JSON', 'composition'
     code_content: Optional[str] = None     # The text inside the fenced block
+    start_line: Optional[int] = None       # Markdown line number where block starts
+    end_line: Optional[int] = None         # Markdown line number where block ends
     exceptions: List[str] = field(default_factory=list) # e.g. "Allow exception: ..."
 
 
@@ -102,6 +104,7 @@ class Layer7Parser:
         self.root = HeaderNode(level=0, title="ROOT")
         self.current_path = [self.root]
         self.all_nodes = []
+        self.strict_mode = False
 
     def parse_text(self, markdown_text: str) -> HeaderNode:
         lines = markdown_text.splitlines()
@@ -110,16 +113,24 @@ class Layer7Parser:
         current_node = self.root
         code_lines = []
         code_lang = None
+        code_start_line = None
 
-        for line in lines:
+        for line_idx, line in enumerate(lines, 1):
+            if line.strip().lower() == "mode: strict":
+                self.strict_mode = True
+                continue
+
             if in_code_block:
                 if line.strip().startswith('```'):
                     # End of code block
                     current_node.code_lang = code_lang
                     current_node.code_content = "\n".join(code_lines)
+                    current_node.start_line = code_start_line
+                    current_node.end_line = line_idx
                     in_code_block = False
                     code_lines = []
                     code_lang = None
+                    code_start_line = None
                 else:
                     code_lines.append(line)
                 continue
@@ -127,6 +138,7 @@ class Layer7Parser:
             if line.strip().startswith('```'):
                 # Start of code block
                 in_code_block = True
+                code_start_line = line_idx
                 lang_match = re.match(r'^```(\w+)', line.strip())
                 if lang_match:
                     code_lang = lang_match.group(1).lower()

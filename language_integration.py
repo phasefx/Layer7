@@ -52,6 +52,7 @@ class ExecutionResult:
     stdout: str
     stderr: str
     returncode: int
+    preamble_length: int = 0
 
     @property
     def success(self) -> bool:
@@ -181,12 +182,20 @@ class MCPDispatcher:
             match = re.match(r'def\s+(\w+)', cs)
             fname = match.group(1) if match else '_unnamed'
             return (
-                "import json as _l7j, os as _l7o\n"
+                "import json as _l7j, os as _l7o, sys as _l7sys\n"
                 f"{cs}\n"
-                "_l7a = _l7j.loads(_l7o.environ.get('LAYER7_CALL_ARGS', '[]'))\n"
+                "try:\n"
+                "    _l7a = _l7j.loads(_l7o.environ.get('LAYER7_CALL_ARGS', '[]'))\n"
+                "except Exception as e:\n"
+                "    print(f'[Layer7 Boundary Error] Failed to deserialize args. {e}', file=_l7sys.stderr)\n"
+                "    _l7sys.exit(254)\n"
                 f"_l7r = {fname}(*_l7a)\n"
                 "if _l7r is not None:\n"
-                "    print(_l7j.dumps(_l7r))\n"
+                "    try:\n"
+                "        print(_l7j.dumps(_l7r))\n"
+                "    except Exception as e:\n"
+                "        print(f'[Layer7 Boundary Error] Failed to serialize return value. Type \\'{type(_l7r).__name__}\\' cannot cross the language boundary. ({e})', file=_l7sys.stderr)\n"
+                "        _l7sys.exit(254)\n"
             )
 
         elif lang in ('perl', 'pl'):
@@ -240,9 +249,13 @@ class MCPDispatcher:
         # ── Python ───────────────────────────────────────────────────
         elif lang in ('python', 'py'):
             lines = [
-                "import json as _l7json, os as _l7os",
-                "with open(_l7os.environ['LAYER7_STATE_FILE']) as _l7f:",
-                "    _l7s = _l7json.load(_l7f)",
+                "import json as _l7json, os as _l7os, sys as _l7sys",
+                "try:",
+                "    with open(_l7os.environ['LAYER7_STATE_FILE']) as _l7f:",
+                "        _l7s = _l7json.load(_l7f)",
+                "except Exception as e:",
+                "    print(f'[Layer7 Boundary Error] Failed to deserialize state: {e}', file=_l7sys.stderr)",
+                "    _l7sys.exit(254)",
             ]
             for title in state:
                 for ident in title_to_identifiers(title):
@@ -335,16 +348,23 @@ class MCPDispatcher:
                 for ident in idents:
                     stubs.append(
                         f"def {ident}(*_l7a):\n"
-                        f"    import subprocess as _l7sp, json as _l7j, os as _l7o\n"
+                        f"    import subprocess as _l7sp, json as _l7j, os as _l7o, sys as _l7sys\n"
                         f"    _l7e = _l7o.environ.copy()\n"
-                        f"    _l7e['LAYER7_CALL_ARGS'] = _l7j.dumps(list(_l7a))\n"
+                        f"    try:\n"
+                        f"        _l7e['LAYER7_CALL_ARGS'] = _l7j.dumps(list(_l7a))\n"
+                        f"    except Exception as e:\n"
+                        f"        print(f'[Layer7 Boundary Error] Failed to serialize args for {func_name}. {{e}}', file=_l7sys.stderr)\n"
+                        f"        _l7sys.exit(254)\n"
                         f"    _l7p = _l7sp.run(['{interpreter}', '{func_path}'],\n"
                         f"                     capture_output=True, text=True, env=_l7e)\n"
                         f"    if _l7p.returncode != 0:\n"
                         f"        raise RuntimeError("
                         f"f'Layer7: {func_name} failed: {{_l7p.stderr}}')\n"
-                        f"    return _l7j.loads(_l7p.stdout)"
-                        f" if _l7p.stdout.strip() else None\n"
+                        f"    try:\n"
+                        f"        return _l7j.loads(_l7p.stdout) if _l7p.stdout.strip() else None\n"
+                        f"    except Exception as e:\n"
+                        f"        print(f'[Layer7 Boundary Error] Failed to deserialize return value from {func_name}. {{e}}', file=_l7sys.stderr)\n"
+                        f"        _l7sys.exit(254)\n"
                     )
 
             # ── JavaScript stubs ─────────────────────────────────────
@@ -431,6 +451,7 @@ class MCPDispatcher:
         func_preamble = self._generate_function_preamble(lang)
 
         # Assemble final code: preamble + user code
+        preamble_length = (var_preamble + func_preamble).count('\n')
         full_code = var_preamble + func_preamble + code
 
         # Write to temp file and run
@@ -446,28 +467,23 @@ class MCPDispatcher:
             cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE if capture_output else None,
-            stderr=subprocess.PIPE,  # always capture stderr so errors are never lost
+            stderr=subprocess.PIPE if capture_output else None,
             text=True,
             env=env,
             cwd=self.working_dir,
         )
         stdout, stderr = process.communicate(input=stdin)
 
-        stderr = stderr or ""
-        if stderr:
-            # Surface errors/warnings even in live (non-capture) mode
-            import sys as _sys
-            _sys.stderr.write(stderr if stderr.endswith("\n") else stderr + "\n")
-
-        # Always return strings (capture=False uses process inheritance for live stdout;
-        # we return '' so callers don't double-print or crash on None).
-        stdout = stdout.rstrip('\n') if stdout else ""
-        stderr = stderr.rstrip('\n')
+        # Always return strings (capture=False uses process inheritance for live
+        # stdout/stderr; we normalize to '' so callers don't double-print or crash).
+        stdout = (stdout or "").rstrip('\n')
+        stderr = (stderr or "").rstrip('\n')
 
         return ExecutionResult(
             stdout=stdout,
             stderr=stderr,
             returncode=process.returncode,
+            preamble_length=preamble_length,
         )
 
 

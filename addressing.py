@@ -19,8 +19,12 @@ def normalize_identifier(name: str) -> str:
     """
     return re.sub(r'[\s_:\.]+', '', name).lower()
 
+class ResolutionError(Exception):
+    pass
+
 class AddressResolver:
-    def __init__(self):
+    def __init__(self, strict_mode: bool = False):
+        self.strict_mode = strict_mode
         # Maps normalized name -> Node
         # If a name maps to None, it means the name is ambiguous (collision).
         self.registry: Dict[str, Optional[Any]] = {}
@@ -53,23 +57,43 @@ class AddressResolver:
             for combo in itertools.combinations(parents, i):
                 parent_combinations.append(combo)
 
-        for combo in parent_combinations:
-            normalized_combo = [normalize_identifier(p) for p in combo]
-            # Concatenate them all together
-            full_normalized_name = "".join(normalized_combo) + normalized_leaf
+        if self.strict_mode:
+            # Register exact paths (e.g. leaf, or parent + " " + leaf)
+            for combo in parent_combinations:
+                exact_name = " ".join(combo + (leaf,))
+                if exact_name in self.registry:
+                    if self.registry[exact_name] is not node:
+                        self.registry[exact_name] = None
+                else:
+                    self.registry[exact_name] = node
+        else:
+            for combo in parent_combinations:
+                normalized_combo = [normalize_identifier(p) for p in combo]
+                # Concatenate them all together
+                full_normalized_name = "".join(normalized_combo) + normalized_leaf
 
-            if full_normalized_name in self.registry:
-                # Collision detected!
-                if self.registry[full_normalized_name] is not node:
-                    self.registry[full_normalized_name] = None # Mark as ambiguous
-            else:
-                self.registry[full_normalized_name] = node
+                if full_normalized_name in self.registry:
+                    # Collision detected!
+                    if self.registry[full_normalized_name] is not node:
+                        self.registry[full_normalized_name] = None # Mark as ambiguous
+                else:
+                    self.registry[full_normalized_name] = node
 
     def resolve(self, reference: str) -> Optional[Any]:
         """
         Find the matching node based on the reference string.
-        Returns None if not found or if ambiguous.
+        Returns None if not found or if ambiguous (in normal mode).
+        In strict mode, raises ResolutionError if missing or ambiguous.
         """
+        if self.strict_mode:
+            # Exact match
+            node = self.registry.get(reference)
+            if node is None:
+                if reference in self.registry:
+                    raise ResolutionError(f"Ambiguous reference: '{reference}'")
+                raise ResolutionError(f"Reference not found: '{reference}'")
+            return node
+
         normalized_ref = normalize_identifier(reference)
         return self.registry.get(normalized_ref)
 

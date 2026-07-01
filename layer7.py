@@ -17,6 +17,7 @@ import argparse
 import sys
 import json
 import os
+import re
 
 from core_structure import Layer7Parser
 from addressing import AddressResolver
@@ -88,6 +89,8 @@ def execute_linear(all_nodes, dispatcher, resolver, program_stdin="", silent=Fal
 
         # ── Composition blocks: execute inline ───────────────────────
         if lang == "composition":
+            if getattr(resolver, 'strict_mode', False):
+                raise SyntaxError(f"[Layer7 Strict Mode Error] Composition DSL is disabled. Header: '{node.title}'")
             print(f"  ⎈  {node.title}  (composition)")
             comp_engine = CompositionEngine(resolver, dispatcher, all_nodes)
             comp_engine.execute_composition(node.code_content)
@@ -121,14 +124,40 @@ def execute_linear(all_nodes, dispatcher, resolver, program_stdin="", silent=Fal
 
         # Error propagation: non-zero exit is fatal
         if not result.success:
-            print(f"\n[Fatal] '{node.title}' exited with code"
-                  f" {result.returncode}")
-            # Only reprint stderr here if we captured it. In live (non-capture)
-            # mode the child inherited stderr and the user already saw the
-            # output as it happened.
-            if result.stderr and capture_output:
-                print(result.stderr)
-            sys.exit(result.returncode)
+            if getattr(resolver, 'strict_mode', False) and node.start_line is not None:
+                print(f"\n[Layer7 Error] Block: '{node.title}' | Markdown Line: {node.start_line}")
+                translated_stderr = result.stderr
+                if translated_stderr:
+                    preamble_len = getattr(result, 'preamble_length', 0)
+                    def replacer_word(match):
+                        line_no = int(match.group(1))
+                        if line_no > preamble_len:
+                            return f"line {line_no - preamble_len + node.start_line}"
+                        return match.group(0)
+                    def replacer_colon(match):
+                        line_no = int(match.group(1))
+                        if line_no > preamble_len:
+                            return f":{line_no - preamble_len + node.start_line}:"
+                        return match.group(0)
+                    translated_stderr = re.sub(r'line\s+(\d+)', replacer_word, translated_stderr)
+                    translated_stderr = re.sub(r':(\d+):', replacer_colon, translated_stderr)
+                print(f"Original Error:\n{translated_stderr}")
+                print("\n--- Boundary State at Execution ---")
+                for k, v in state.items():
+                    try:
+                        print(f"{k}: {json.dumps(v)}")
+                    except Exception as e:
+                        print(f"{k}: <Unserializable: {e}>")
+                sys.exit(result.returncode)
+            else:
+                print(f"\n[Fatal] '{node.title}' exited with code"
+                      f" {result.returncode}")
+                # Only reprint stderr here if we captured it. In live (non-capture)
+                # mode the child inherited stderr and the user already saw the
+                # output as it happened.
+                if result.stderr and capture_output:
+                    print(result.stderr)
+                sys.exit(result.returncode)
 
         # Print stdout for blocks that don't capture output via arrows
         if result.stdout and node.arrow_direction not in ('>', '>>') and not silent:
@@ -145,6 +174,7 @@ def main():
     parser.add_argument("--mode", choices=["debug", "toolkit"], help="MCP server mode")
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind for SSE server (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, help="Port to bind for SSE server (triggers network mode)")
+    parser.add_argument("--strict", action="store_true", help="Enable strict mode (disables fuzzy resolution)")
     parser.add_argument("file", help="The Layer7 Markdown file to execute")
     parser.add_argument("args", nargs="*",
                         help="Arguments passed through to code blocks "
@@ -187,6 +217,11 @@ def main():
     l7_parser = Layer7Parser()
     l7_parser.raw_text = markdown_text
     root_node = l7_parser.parse_text(markdown_text)
+
+    # Apply CLI override if present
+    if getattr(args, 'strict', False):
+        l7_parser.strict_mode = True
+
     all_nodes = l7_parser.all_nodes
 
     # Parse data blocks (JSON always, YAML if PyYAML present) — happens early
@@ -194,7 +229,7 @@ def main():
     parse_data_blocks(all_nodes)
 
     # 2. Register addresses  (addressing)
-    resolver = AddressResolver()
+    resolver = AddressResolver(strict_mode=l7_parser.strict_mode)
     for node in all_nodes:
         resolver.register_node(node, filename=os.path.basename(args.file))
 
