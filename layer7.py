@@ -127,13 +127,10 @@ def execute_linear(all_nodes, dispatcher, resolver, program_stdin="", silent=Fal
         # Error propagation: non-zero exit is fatal
         if not result.success:
             if getattr(resolver, 'strict_mode', False) and node.start_line is not None:
-                print(f"\n[Layer7 Error] Block: '{node.title}' | Markdown Line: {node.start_line}")
+                print(f"\n[Layer7 Error] Block: '{node.title}' (Starts at Markdown Line: {node.start_line})")
                 translated_stderr = result.stderr
-                print(f"DEBUG_STDERR: {repr(translated_stderr)}")
-                print(f"DEBUG_STDOUT: {repr(result.stdout)}")
                 if translated_stderr:
                     preamble_len = getattr(result, 'preamble_length', 0)
-                    print(f"DEBUG: {preamble_len=} {node.start_line=}")
                     def replacer_word(match):
                         line_no = int(match.group(1))
                         if line_no > preamble_len:
