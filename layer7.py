@@ -168,6 +168,27 @@ def execute_linear(all_nodes, dispatcher, resolver, program_stdin="", silent=Fal
 
 # ─── Main ────────────────────────────────────────────────────────────────────
 
+def resolve_program_args(args_list, invocation_dir=None):
+    """Resolve user-supplied positional args to absolute paths if they reference
+
+    files/directories relative to invocation_dir, while preserving general
+    keywords, flags, and non-file arguments.
+    """
+    if invocation_dir is None:
+        invocation_dir = os.getcwd()
+    resolved = []
+    for a in args_list:
+        if os.path.isabs(a):
+            resolved.append(a)
+        elif os.path.exists(os.path.join(invocation_dir, a)):
+            resolved.append(os.path.abspath(os.path.join(invocation_dir, a)))
+        elif ('/' in a or (os.sep != '/' and os.sep in a)) and not a.startswith('http://') and not a.startswith('https://'):
+            resolved.append(os.path.abspath(os.path.join(invocation_dir, a)))
+        else:
+            resolved.append(a)
+    return resolved
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Layer7 Engine (v0.8) — "
@@ -198,12 +219,7 @@ def main():
     # "examples/good_tickets.json") must be turned into absolute paths so
     # they remain valid inside the child's (different) cwd.
     invocation_dir = os.getcwd()
-    resolved_args = []
-    for a in args.args:
-        if os.path.isabs(a):
-            resolved_args.append(a)
-        else:
-            resolved_args.append(os.path.abspath(os.path.join(invocation_dir, a)))
+    resolved_args = resolve_program_args(args.args, invocation_dir)
 
     program_stdin = ""
     if not args.serve and not sys.stdin.isatty():

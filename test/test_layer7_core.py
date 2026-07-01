@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from core_structure import Layer7Parser, HeaderNode
 from addressing import AddressResolver, normalize_identifier
 from language_integration import MCPDispatcher, build_state, get_arrow_input_data, apply_arrow_output, ExecutionResult
+from layer7 import resolve_program_args
 
 
 def test_normalize_identifier():
@@ -178,6 +179,19 @@ print(use_it())
     res = disp.execute("python", py_code, state={}, capture_output=True)
     assert res.success
     assert res.stdout in ("42", "42.0", "42\n") or res.stdout.strip() == "42"
+
+
+def test_resolve_program_args():
+    cwd = os.getcwd()
+    args = ["gemma26", "speed", "vision_off", "examples/raffle.md"]
+    resolved = resolve_program_args(args, cwd)
+    assert resolved[0] == "gemma26"
+    assert resolved[1] == "speed"
+    assert resolved[2] == "vision_off"
+    # examples/raffle.md exists relative to repo root when running tests
+    if os.path.exists(os.path.join(cwd, "examples/raffle.md")):
+        assert os.path.isabs(resolved[3])
+        assert resolved[3].endswith("examples/raffle.md")
 
 
 if __name__ == "__main__":
