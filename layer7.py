@@ -115,9 +115,11 @@ def execute_linear(all_nodes, dispatcher, resolver, program_stdin="", silent=Fal
 
         # Determine if we should capture output
         capture_output = silent or (node.arrow_direction in ('>', '>>'))
+        capture_stderr = capture_output or getattr(resolver, 'strict_mode', False)
 
         result = dispatcher.execute(
-            lang, node.code_content, stdin=stdin_data, state=state, capture_output=capture_output)
+            lang, node.code_content, stdin=stdin_data, state=state, 
+            capture_output=capture_output, capture_stderr=capture_stderr)
 
         # Arrow wiring: OUTPUT  (> or >>)
         apply_arrow_output(node, resolver, result.stdout)
@@ -127,8 +129,11 @@ def execute_linear(all_nodes, dispatcher, resolver, program_stdin="", silent=Fal
             if getattr(resolver, 'strict_mode', False) and node.start_line is not None:
                 print(f"\n[Layer7 Error] Block: '{node.title}' | Markdown Line: {node.start_line}")
                 translated_stderr = result.stderr
+                print(f"DEBUG_STDERR: {repr(translated_stderr)}")
+                print(f"DEBUG_STDOUT: {repr(result.stdout)}")
                 if translated_stderr:
                     preamble_len = getattr(result, 'preamble_length', 0)
+                    print(f"DEBUG: {preamble_len=} {node.start_line=}")
                     def replacer_word(match):
                         line_no = int(match.group(1))
                         if line_no > preamble_len:

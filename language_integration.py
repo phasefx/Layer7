@@ -416,7 +416,7 @@ class MCPDispatcher:
 
     def execute(self, language: str, code: str, args: List[Any] = None,
                 stdin: str = None, state: Dict[str, Any] = None,
-                capture_output: bool = True) -> ExecutionResult:
+                capture_output: bool = True, capture_stderr: bool = None) -> ExecutionResult:
         """Execute a code block with full preamble injection.
 
         Args:
@@ -426,10 +426,13 @@ class MCPDispatcher:
             stdin: Data to pipe to stdin (for ``<`` arrow blocks).
             state: ``{header_title: data_value}`` for preamble injection.
             capture_output: If False, stdout and stderr stream directly to console.
+            capture_stderr: If provided, overrides stderr capture behavior.
 
         Returns:
             `ExecutionResult` with stdout, stderr, returncode.
         """
+        if capture_stderr is None:
+            capture_stderr = capture_output
         if args is None:
             args = list(self.program_args)
         if state is None:
@@ -467,7 +470,7 @@ class MCPDispatcher:
             cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE if capture_output else None,
-            stderr=subprocess.PIPE if capture_output else None,
+            stderr=subprocess.PIPE if capture_stderr else None,
             text=True,
             env=env,
             cwd=self.working_dir,
