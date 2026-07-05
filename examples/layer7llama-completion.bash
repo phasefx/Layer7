@@ -1,4 +1,5 @@
 # Bash completion for layer7llama.md (or layer7llama command)
+# Named-flag interface: --model KEY --profile NAME [--vision|--no-vision] [--ctx N] [--ngl N]
 
 _layer7llama_completion() {
     local cur prev words cword
@@ -12,21 +13,43 @@ _layer7llama_completion() {
         cword=$COMP_CWORD
     fi
 
-    # Arguments index relative to command
-    case $cword in
-        1)
-            # First argument: model_key
+    local flags="--model --profile --vision --no-vision --ctx --ngl"
+
+    case "$prev" in
+        --model)
             COMPREPLY=( $(compgen -W "gemma26 gemma31 qwen27 qwencoder30 qwopus qwencodernext" -- "$cur") )
+            return 0
             ;;
-        2)
-            # Second argument: profile
+        --profile)
             COMPREPLY=( $(compgen -W "speed accuracy space" -- "$cur") )
+            return 0
             ;;
-        3)
-            # Third argument: vision_toggle
-            COMPREPLY=( $(compgen -W "vision_on vision_off" -- "$cur") )
+        --ctx|--ngl)
+            # Free-form integer values; nothing sensible to complete.
+            COMPREPLY=()
+            return 0
             ;;
     esac
+
+    # Otherwise, suggest remaining flags not already present on the line.
+    local used_flags=()
+    local w
+    for w in "${words[@]}"; do
+        case "$w" in
+            --model|--profile|--vision|--no-vision|--ctx|--ngl)
+                used_flags+=("$w")
+                ;;
+        esac
+    done
+
+    local remaining=""
+    for f in $flags; do
+        if [[ ! " ${used_flags[*]} " =~ " ${f} " ]]; then
+            remaining="$remaining $f"
+        fi
+    done
+
+    COMPREPLY=( $(compgen -W "$remaining" -- "$cur") )
     return 0
 }
 
