@@ -1,0 +1,9 @@
+# Codebase Architecture Guide
+
+### Executive Summary
+
+The data flow follows a linear pipeline that transforms unstructured text into executable logic. It begins with the `Layer7Parser`, which ingests text to produce a hierarchical tree of `HeaderNode` objects. These nodes are then indexed by the `AddressResolver` to enable identifier-based lookups. The `CompositionEngine` orchestrates the execution sequence by parsing routing rules and chaining these resolved nodes together. Finally, the `MCPDispatcher` handles the actual execution by wrapping the node's code content into language-specific scripts and dispatching them to external interpreters, returning an `ExecutionResult`.
+
+State management is distributed across three distinct layers: structural, registry, and runtime. The structural state is maintained as a tree of `HeaderNode` objects, preserving the document's hierarchy and metadata. The registry state is managed by the `AddressResolver`, which maps normalized identifiers to specific node instances for rapid retrieval. Runtime state is transient and encapsulated within the `CompositionEngine`, which tracks the execution cursor, current data values, and routing logic to manage the flow of control between disparate code blocks.
+
+Hidden architectural coupling exists primarily between the input DSL and the execution engine. The system is tightly coupled to a specific text-based formatting convention (headers and routing syntax), meaning any change to the document structure requires simultaneous updates to both the `Layer7Parser` and the `CompositionEngine`. Additionally, there is a deep coupling between the `MCPDispatcher` and the `HeaderNode` properties; the dispatcher relies on the parser's ability to correctly categorize `code_lang` and `code_content` to generate the necessary preambles and wrappers for external execution.
