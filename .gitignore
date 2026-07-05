@@ -13,3 +13,4 @@ env/
 tmp/
 *.tmp
 
+.depwire/
