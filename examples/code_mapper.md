@@ -106,8 +106,7 @@ data = {
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt}
     ],
-    "temperature": 0.1,
-    "max_tokens": 1024
+    "temperature": 0.1
 }
 
 req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers=headers)
