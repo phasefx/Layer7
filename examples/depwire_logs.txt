@@ -1,0 +1,4 @@
+Parsing project: /home/coding/git/Layer7
+[Parser] Cache: 14 hits, 0 files re-parsed
+Parsed 14 files
+Graph exported to: depwire-output.json
