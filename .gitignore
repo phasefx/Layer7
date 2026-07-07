@@ -14,3 +14,4 @@ tmp/
 *.tmp
 
 .depwire/
+.aider*
