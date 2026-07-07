@@ -4,19 +4,26 @@
 
 Layer7 lets you write code in whatever languages you already know, organized inside a single Markdown file. It is literate programming for humans first — especially solo hobbyists and people who benefit from skimmable, chunked, narrative-driven code.
 
-Inspired by the Unix philosophy and the reality that humans can comfortably hold about **7** things in working memory at once.
+Inspired by the Unix philosophy of writing small composable tools that do one thing well, and the reality that humans can comfortably hold about **7** things in working memory at once.
 
-- Version: 0.8 (Evolved)
+- Version: 0.9 (Evolved)
 - Status: Usable + evolving
 - Primary doc: [`Layer7_Design.md`](Layer7_Design.md)
+- Primer for LLMs: [`LAYER7_PRIMER.md`](LAYER7_PRIMER.md)
 
-## Why Layer7?
+## Why Layer7? Or, you can do all of this with a well-commented Bash script. :-)
 
-- **Skimmable after a long break** — Markdown headers give instant structure and folding in good editors.
-- **Polyglot without pain** — Mix Bash, Python, JavaScript, Perl, Ruby (more easy to add) in one file. Cross-language function calls "just work".
-- **Visual dataflow** — Use arrows in headers (`<`, `>`, `<<`, `>>`) to wire data between chunks instead of temp files and shell glue.
-- **7-chunk friction** — The runtime warns you when sections grow past ~7 children (you can `Allow exception:`).
-- **LLM / agent friendly** — Run with `--serve` to expose every block and variable as MCP tools.
+Layer7's actual value proposition over that isn't "you couldn't do this in Bash" — it's a narrower claim:
+
+**The document is the program** in a way that survives context-switching. A Bash script with good comments is readable if you wrote it recently and remember it. A Layer7 document is readable cold, to someone who didn't write it, including a future LLM agent who needs to understand what it does before invoking it. The narrative and the execution are the same artifact, not adjacent artifacts that drift apart.
+
+**Cross-language without glue code**. Bash can shell out to Python and capture stdout, but you're writing the serialization/deserialization yourself every time. Layer7's preamble injection handles the boundary crossing invisibly. That's a real reduction in friction specifically at the polyglot seam.
+
+**The 7-chunk friction signal is structural, not documentary.** A Bash script can have 40 functions and nothing stops you. Layer7 warns you. The constraint is in the runtime, not the comments.
+
+But honestly? For a solo coder who knows Bash well and is working on a single-language problem — reach for the Bash script. Layer7 earns its keep specifically when the problem is polyglot, when the document needs to be readable by parties other than its author, or when the author is an LLM agent that needs a structured execution surface rather than freeform scripting.
+
+**Layer7 is a more specialized tool.** Specialized tools are only better when you're doing the specific thing they're specialized for. And that's very Unix.
 
 It is explicitly *not* aimed at large enterprise teams.
 
