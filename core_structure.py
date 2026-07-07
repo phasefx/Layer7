@@ -28,9 +28,12 @@ class HeaderNode:
     exceptions: List[str] = field(default_factory=list) # e.g. "Allow exception: ..."
 
 
-    # Redirection arrows
-    arrow_direction: Optional[str] = None  # '<', '<<', '>', '>>'
-    arrow_target: Optional[str] = None     # The header name it points to
+    # Redirection arrows (input)
+    input_direction: Optional[str] = None  # '<' or '<<'
+    input_target: Optional[str] = None
+    # Redirection arrows (output)
+    output_direction: Optional[str] = None # '>' or '>>'
+    output_target: Optional[str] = None
 
     # Internal state for execution
     data_value: Any = None
@@ -59,32 +62,27 @@ def parse_header_line(line: str) -> Optional[Dict[str, Any]]:
     result = {
         "level": level,
         "title": text,
-        "arrow_direction": None,
-        "arrow_target": None,
+        "input_direction": None,
+        "input_target": None,
+        "output_direction": None,
+        "output_target": None,
         "inline_var_type": None
     }
 
     # 1. Extract Redirection Arrows
-    # Looks for things like: <===, <<=, ===>, ===>>, <-, ->, etc.
-    # Outermost glyph determines direction.
-    arrow_pattern = r'\s+(<{1,2}[-=]*|[-=]*>{1,2})\s+(.+)$'
-    arrow_match = re.search(arrow_pattern, text)
-    if arrow_match:
-        arrow_str = arrow_match.group(1)
-        target = arrow_match.group(2).strip()
+    # Look for input
+    in_m = re.search(r'(<{1,2}[-=]*)\s+([^=>#\s]+)', text)
+    if in_m:
+        result['input_direction'] = '<<' if '<<' in in_m.group(1) else '<'
+        result['input_target'] = in_m.group(2).strip()
+        text = text.replace(in_m.group(0), "").strip()
 
-        # Determine canonical direction
-        if '<<' in arrow_str:
-            result['arrow_direction'] = '<<'
-        elif '<' in arrow_str:
-            result['arrow_direction'] = '<'
-        elif '>>' in arrow_str:
-            result['arrow_direction'] = '>>'
-        elif '>' in arrow_str:
-            result['arrow_direction'] = '>'
-
-        result['arrow_target'] = target
-        text = text[:arrow_match.start()].strip() # Remove arrow part from title
+    # Look for output
+    out_m = re.search(r'([-=]*>{1,2})\s+([^<#\s]+)', text)
+    if out_m:
+        result['output_direction'] = '>>' if '>>' in out_m.group(1) else '>'
+        result['output_target'] = out_m.group(2).strip()
+        text = text.replace(out_m.group(0), "").strip()
 
     # 2. Extract Inline Variables from the remaining title
     # Matches [] or {} or string at the end of the header
@@ -165,8 +163,10 @@ class Layer7Parser:
                     level=level,
                     title=header_data['title'],
                     parent=parent,
-                    arrow_direction=header_data['arrow_direction'],
-                    arrow_target=header_data['arrow_target'],
+                    input_direction=header_data['input_direction'],
+                    input_target=header_data['input_target'],
+                    output_direction=header_data['output_direction'],
+                    output_target=header_data['output_target'],
                     inline_var_type=header_data['inline_var_type']
                 )
 

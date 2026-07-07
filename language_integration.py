@@ -507,13 +507,13 @@ def build_state(nodes):
 
 def get_arrow_input_data(node, resolver):
     """Return JSON string for stdin if the node header has an input arrow (< or <<)."""
-    if node.arrow_direction in ('<', '<<') and node.arrow_target:
-        target = resolver.resolve(node.arrow_target)
+    if node.input_direction in ('<', '<<') and node.input_target:
+        target = resolver.resolve(node.input_target)
         if target and target.data_value is not None:
             return json.dumps(target.data_value)
         elif target is None:
             print(f"[Warning] Input arrow target "
-                  f"'{node.arrow_target}' not found")
+                  f"'{node.input_target}' not found")
     return None
 
 
@@ -522,12 +522,12 @@ def apply_arrow_output(node, resolver, stdout_text):
 
     Returns True if an output arrow was applied.
     """
-    if node.arrow_direction not in ('>', '>>') or not node.arrow_target:
+    if node.output_direction not in ('>', '>>') or not node.output_target:
         return False
-    target = resolver.resolve(node.arrow_target)
+    target = resolver.resolve(node.output_target)
     if target is None:
         print(f"[Warning] Output arrow target "
-              f"'{node.arrow_target}' not found")
+              f"'{node.output_target}' not found")
         return False
     if not stdout_text:
         return False
@@ -536,7 +536,7 @@ def apply_arrow_output(node, resolver, stdout_text):
     except json.JSONDecodeError:
         parsed = stdout_text
 
-    if node.arrow_direction == '>':
+    if node.output_direction == '>':
         # Replace
         target.data_value = parsed
     else:

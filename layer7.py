@@ -109,12 +109,14 @@ def execute_linear(all_nodes, dispatcher, resolver, program_stdin="", silent=Fal
 
         # Execute
         arrow_label = ""
-        if node.arrow_direction and node.arrow_target:
-            arrow_label = f"  {node.arrow_direction} {node.arrow_target}"
+        if node.input_direction and node.input_target:
+            arrow_label += f"  {node.input_direction} {node.input_target}"
+        if node.output_direction and node.output_target:
+            arrow_label += f"  {node.output_direction} {node.output_target}"
         print(f"  ▶  {node.title}  ({lang}{arrow_label})")
 
         # Determine if we should capture output
-        capture_output = silent or (node.arrow_direction in ('>', '>>'))
+        capture_output = silent or (node.output_direction in ('>', '>>'))
         capture_stderr = capture_output or getattr(resolver, 'strict_mode', False)
 
         result = dispatcher.execute(
